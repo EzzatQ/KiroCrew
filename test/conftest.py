@@ -388,6 +388,9 @@ from conftest_resets_mcp import (  # noqa: E402,F401 -- bound for pytest and imp
     _reset_mcp_probe_same_process_locks,
     _reset_mcp_sources_read_snapshot,
 )
+from conftest_resets_scratch import (  # noqa: E402,F401 -- bound for pytest and importers
+    _forget_unpersisted_quarantine_marks,
+)
 
 # The in-memory Slack client and the Slack state resets.
 from conftest_slack import (  # noqa: E402,F401 -- bound for pytest and importers

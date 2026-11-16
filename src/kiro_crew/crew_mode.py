@@ -303,6 +303,29 @@ def persisted_parents() -> dict[str, str]:
     }
 
 
+def persisted_lineage_trust() -> tuple[bool, frozenset[str]]:
+    """``(complete, suspect slots)`` of the lineage :func:`persisted_parents` reads.
+
+    A caller that CERTIFIES a placement through a persisted edge asks this beside
+    :func:`persisted_parents`: an edge counts only on a complete reading where
+    neither end is suspect. ``(False, frozenset())`` when the crew log is off, its
+    tree is not seeded, or the read fails. In memory; never raises.
+    """
+    try:
+        from kiro_crew.crew_log import emit as crew_log_emit
+
+        if not crew_log_emit.enabled():
+            return False, frozenset()
+        from kiro_crew.crew_log.session_tree_projection import projection
+
+        tree = projection()
+        if not tree.seeded_for_current_store:
+            return False, frozenset()
+        return tree.edge_trust()
+    except Exception:
+        return False, frozenset()
+
+
 def persisted_tree_slots() -> frozenset[str] | None:
     """Every slot the crew log's session tree holds a node for, or ``None`` when unread.
 
@@ -380,6 +403,16 @@ def _creator_of(
     saved: str = "",
     untracked: bool = False,
 ) -> str:
+    """See :func:`_creator_and_source`; the creator only."""
+    return _creator_and_source(row, settled, saved, untracked)[0]
+
+
+def _creator_and_source(
+    row: Mapping[str, Any],
+    settled: bool = False,
+    saved: str = "",
+    untracked: bool = False,
+) -> tuple[str, bool]:
     """The slot key that holds *row* now, or ``""``.
 
     The crew log's ``parent`` edge first: it is the current lineage, which an
@@ -389,18 +422,21 @@ def _creator_of(
     session tree holds no node for it at all (*untracked*): then *saved*, the
     ``created_by`` its metadata line names, stands in. Otherwise ``created_by``
     (the birth stamp), then *saved*, stand in for a missing edge.
+
+    The second value is whether the creator is corroborated: False only when it
+    came from *saved*, the metadata line's own claim, which nothing checked.
     """
     parent = row.get("parent")
     if isinstance(parent, Mapping):
         cited = parent.get("slot") or parent.get("key")
         if isinstance(cited, str) and cited:
-            return cited
+            return cited, True
     if settled and "parent" in row and not row.get("lineage_pending"):
-        return saved if untracked else ""
+        return (saved, False) if untracked and saved else ("", True)
     created_by = row.get("created_by")
     if isinstance(created_by, str) and created_by:
-        return created_by
-    return saved
+        return created_by, True
+    return saved, not saved
 
 
 def _live_ancestor_of(row: Mapping[str, Any]) -> str:
@@ -694,6 +730,17 @@ def share_tree_root(
     *,
     settled: bool = False,
 ) -> str:
+    """See :func:`share_tree_placement`; the root only."""
+    return share_tree_placement(slots, slot_key, parents, settled=settled)[0]
+
+
+def share_tree_placement(
+    slots: Mapping[str, Any],
+    slot_key: str,
+    parents: Mapping[str, Any] | None = None,
+    *,
+    settled: bool = False,
+) -> tuple[str, bool]:
     """The top of live slot *slot_key*'s creator chain: its session tree's root.
 
     Read by chat runtime sharing (``acp.chat_runtime_sharing.share_tree_root_of``)
@@ -704,6 +751,11 @@ def share_tree_root(
     mode: a Bot thread, a conductor and a plain chat all root their own tree. A
     slot with no creator is its own root, and the walk stops on a repeat, so a
     cycle in forged records cannot loop. No I/O.
+
+    The second value is whether the placement is verified: every hop came from
+    the crew log, the frame or a birth stamp rather than a metadata line's own
+    claim, and the root is a live slot. A placeholder creator (the unverified
+    sentinel, a ``cron:`` job) is never a live slot, so it is never verified.
     """
     rows: dict[str, dict[str, Any]] = {}
     for slot in list(slots.values()):
@@ -716,7 +768,7 @@ def share_tree_root(
     settled = settled and parents is not None
     tree: list[frozenset[str] | None] = []
 
-    def creator_of(key: str, row: Mapping[str, Any]) -> str:
+    def creator_of(key: str, row: Mapping[str, Any]) -> tuple[str, bool]:
         saved = row.get("saved_created_by") or ""
         if not isinstance(saved, str) or saved == key:
             saved = ""
@@ -726,19 +778,39 @@ def share_tree_root(
                 tree.append(persisted_tree_slots())
             known = tree[0]
             untracked = known is not None and key not in known and f"dashboard:{key}" not in known
-        return _creator_of(row, settled, saved, untracked)
+        creator, corroborated = _creator_and_source(row, settled, saved, untracked)
+        parent = row.get("parent")
+        cited = (parent.get("slot") or parent.get("key")) if isinstance(parent, Mapping) else ""
+        if creator and creator == cited:
+            # A frame edge comes from the same projection reading persisted() asks about.
+            corroborated = corroborated and persisted_edge_trusted(key, creator)
+        return creator, corroborated
 
     lineage: list[Mapping[str, str]] = []
+    trust: list[tuple[bool, frozenset[str]]] = []
 
     def persisted(key: str) -> str:
         if not lineage:
             lineage.append(persisted_parents())
         return lineage[0].get(key, "") or ""
 
+    def persisted_edge_trusted(child: str, parent: str) -> bool:
+        # An incomplete or suspect reading may hold an edge a release since moved.
+        if not trust:
+            trust.append(persisted_lineage_trust())
+        complete, suspect = trust[0]
+        return complete and child not in suspect and parent not in suspect
+
     root = slot_key
     seen = {slot_key}
     current: Mapping[str, Any] | None = rows.get(slot_key)
-    creator = creator_of(slot_key, current) if current is not None else persisted(slot_key)
+    verified = True
+    if current is not None:
+        creator, corroborated = creator_of(slot_key, current)
+        verified = corroborated
+    else:
+        creator = persisted(slot_key)
+        verified = not creator or persisted_edge_trusted(slot_key, creator)
     while creator and creator not in seen:
         root = creator
         seen.add(creator)
@@ -746,11 +818,16 @@ def share_tree_root(
         if above is None:
             live_ancestor = _live_ancestor_of(current) if current is not None else ""
             current = None
-            creator = live_ancestor or persisted(creator)
+            if live_ancestor:
+                creator = live_ancestor
+            else:
+                child, creator = creator, persisted(creator)
+                verified = verified and (not creator or persisted_edge_trusted(child, creator))
             continue
         current = above
-        creator = creator_of(creator, above)
-    return root
+        creator, corroborated = creator_of(creator, above)
+        verified = verified and corroborated
+    return root, verified and root in rows
 
 
 def mate_workers_of(rows: Iterable[Mapping[str, Any]], root_key: str) -> list[Mapping[str, Any]]:

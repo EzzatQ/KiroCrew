@@ -26,6 +26,7 @@ def isolated_tree_bindings(_floor_monkeypatch) -> None:
     _floor_monkeypatch.setattr(trees, "_TREE_INDEX_UNPERSISTED", set(), raising=False)
     _floor_monkeypatch.setattr(trees, "_TREE_INDEX_RETIRED_TICKET", -1, raising=False)
     _floor_monkeypatch.setattr(trees, "_TREE_INDEX_DISK_SNAPSHOT", None, raising=False)
+    _floor_monkeypatch.setattr(trees, "_QUARANTINE_LIVE", {}, raising=False)
 
 
 @pytest.fixture(name="scratch_root")
@@ -42,6 +43,21 @@ class TestAResumedKeyRejoinsItsTree:
     The gateway keeps the index inside the masked root and passes the recorded
     tree as ``shared_scratch`` when the conversation's process starts.
     """
+
+    @pytest.fixture(autouse=True)
+    def settled_lineage(self, _floor_monkeypatch) -> None:
+        """The persisted session-tree lineage reads as loaded unless a test says not."""
+        import importlib.util
+
+        self.real_lineage_reason = None
+        if importlib.util.find_spec("kiro_crew.session_allocation_parts.scratch_ownership") is None:
+            return  # a tree without the check: nothing to stub
+        from kiro_crew.session_allocation_parts import scratch_ownership
+
+        self.real_lineage_reason = getattr(scratch_ownership, "_lineage_unavailable_reason", None)
+        _floor_monkeypatch.setattr(
+            scratch_ownership, "_lineage_unavailable_reason", lambda: "", raising=False
+        )
 
     def test_the_index_round_trips_and_prunes_reclaimed_trees(self, scratch_root: Path) -> None:
         scratch_root.mkdir(parents=True)

@@ -410,6 +410,22 @@ class SessionTreeProjection:
             return ""
         return creator
 
+    def edge_trust(self) -> "tuple[bool, frozenset[str]]":
+        """``(complete, suspect slots)`` for a reader that certifies a persisted edge. No I/O.
+
+        *complete* is ``reading().incomplete`` turned round, widened by a fault no unit
+        can be named for. The suspect slots are those holding a unit whose decision
+        this state may have wrong; that set can outlive ``incomplete``, because a
+        later clean read of a faulted unit clears the fault and keeps the suspect mark,
+        so a reader checks both.
+        """
+        with self._lock:
+            complete = not (self._incomplete or self._fault_sids or self._unattributed_gap)
+            suspect = frozenset(
+                record.slot for sid, record in self._records.items() if sid in self._suspect_sids
+            )
+        return complete, suspect
+
     def spawned_creator(self, slot: str) -> str:
         """*slot*'s creator from a trusted ``session/spawned`` record, or ``""``. No I/O.
 

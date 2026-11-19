@@ -1138,4 +1138,12 @@ _GATEWAY_SINKS: tuple[tuple[str, str, str], ...] = (
         "credentials) whole before URLs are shortened and the excerpt is cut, so "
         "a credential inside a long URL never reaches the excerpt.",
     ),
+    (
+        "Second-view tab metadata handed to an app page",
+        "dashboard/handlers/browser_live_views.py",
+        "The `/api/browser/live/views/tabs` route lists the slot's own tabs for an "
+        "app page's `BrowserView tabId` picker. Each tab's URL and title passes the "
+        # _redacted runs both redact_exfiltration_urls and redact_credentials.
+        "exfiltration-URL and credential redactors before it leaves the gateway.",
+    ),
 )

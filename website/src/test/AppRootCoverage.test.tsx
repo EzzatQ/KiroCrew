@@ -93,6 +93,7 @@ globalThis.ResizeObserver = class {
 
 import App from '../App'
 import { api } from '../api/client'
+import { MORE_BELOW_MASK } from '../components/ModelEffortDropdown'
 
 /** Status payload the shell diffs `mc-last-version` against. */
 // `update_can_apply` is what licenses the in-app "Update Now" path: availability
@@ -351,11 +352,16 @@ describe('App — update progress overlay', () => {
     // The idle copy stands down: both lines together would say "waiting" and
     // "dialing" about the same moment.
     expect(screen.queryByText('Page will reconnect when ready…')).toBeNull()
+    // The restart wait offers the laundry game below its line (after 30 s, or on Space); the line stays.
+    act(() => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })) })
+    expect(screen.getByTestId('wait-game')).toBeInTheDocument()
+    expect(screen.getByTestId('update-reconnecting')).toBeInTheDocument()
 
     // Reconnected (the gateway is back, the reload latch takes it from here):
-    // the transient line yields back to the idle copy.
+    // the transient line yields back to the idle copy, and the game goes with it.
     await act(async () => { store.dispatch(sseConnected()) })
     expect(screen.queryByTestId('update-reconnecting')).toBeNull()
+    expect(screen.queryByTestId('wait-game')).toBeNull()
     expect(screen.getByText('Page will reconnect when ready…')).toBeInTheDocument()
   })
 
@@ -373,6 +379,47 @@ describe('App — update progress overlay', () => {
     const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
     act(() => { document.activeElement!.dispatchEvent(tab) })
     expect(tab.defaultPrevented).toBe(true)
+  })
+
+  describe('bottom edge cue', () => {
+    // jsdom does no layout: the overlay's root and its scroll box get a stubbed geometry, keyed by test id.
+    const stub = (hidden: number) => {
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(200)
+      vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
+        return 200 + (['update-overlay', 'update-overlay-scroll'].includes(this.dataset.testid ?? '') ? hidden : 0)
+      })
+    }
+    afterEach(() => { vi.restoreAllMocks() })
+    const mask = MORE_BELOW_MASK.split(' ')[0]
+    const faded = (root: HTMLElement) => [root, ...root.querySelectorAll<HTMLElement>('*')].filter(el => el.className.includes?.(mask))
+    const measure = async () => {
+      const root = await screen.findByTestId('update-overlay')
+      for (const el of [root, root.querySelector<HTMLElement>('[data-testid="update-overlay-scroll"]')]) if (el) fireEvent.scroll(el) // the scroll listener re-measures, as the observer's first delivery does
+      return root
+    }
+
+    it('fades the overlay\'s bottom edge while its content runs past a short window', async () => {
+      stub(120)
+      await startProgress()
+      expect(faded(await measure())).toHaveLength(1)
+    })
+
+    it('puts the fade on the scroll box, never on the element that paints the backdrop it would thin', async () => {
+      stub(120)
+      await startProgress()
+      const root = await measure()
+      const [box] = faded(root)
+      expect(box.dataset.testid).toBe('update-overlay-scroll')
+      expect(root.className).toMatch(/bg-bg\/80/)
+      expect(root.className).toContain('backdrop-blur')
+      expect(box.className).not.toMatch(/bg-bg|backdrop-blur/)
+    })
+
+    it('leaves the overlay unfaded when its content fits', async () => {
+      stub(0)
+      await startProgress()
+      expect(faded(await measure())).toHaveLength(0)
+    })
   })
 
   it.each(['failed', 'error'] as const)('treats the %s step as terminal', async (step) => {

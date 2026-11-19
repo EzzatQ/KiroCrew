@@ -21,7 +21,10 @@ import { shouldNudge, snoozeRecord, skipRecord, type UpdateNudgeRecord, type Upd
 import { foldStableStamp } from '../utils/displayVersion'
 import { editionOwnsUpdatePrompts, type UpdateState } from '../hooks/useUpdateSubscription'
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap'
+import { useScrollEdgesY } from '../hooks/useScrollEdges'
+import { MORE_BELOW_MASK } from './ModelEffortDropdown'
 import { reportForError } from '../utils/errorReport'
+import { WaitGame } from './laundry/WaitGame'
 
 /**
  * Proactive "update found" modal — the one interruption between an update
@@ -220,6 +223,8 @@ export default function UpdateFoundModal({ held = false }: { held?: boolean } = 
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
   const [restarting, setRestarting] = useState(false)
+  // The body scrolls inside a height-capped dialog (the restart wait adds the game below the fold): the fade says more sits below.
+  const [attachBody, bodyEdges, , attachBodyContent] = useScrollEdgesY<HTMLDivElement>()
   const [applyError, setApplyError] = useState('')
   const [persistError, setPersistError] = useState('')
 
@@ -523,7 +528,8 @@ export default function UpdateFoundModal({ held = false }: { held?: boolean } = 
           )}
         </div>
 
-        <div className="px-4 py-3 text-sm text-text">
+        <div ref={attachBody} data-testid="update-found-body" className={`min-h-0 overflow-y-auto px-4 py-3 text-sm text-text ${bodyEdges.bottom ? MORE_BELOW_MASK : ''}`}>
+          <div ref={attachBodyContent}>
           <p>
             {/* One interpolated key, not fixed JSX fragments: the version slot
                 sits in locale-specific positions (sentence-medial in ja/ko,
@@ -615,6 +621,8 @@ export default function UpdateFoundModal({ held = false }: { held?: boolean } = 
             testId="update-found-persist-error"
           />
           {restarting && <p className="mt-2 text-[12px] text-muted">{i18nT('components.updateFoundModal.updating_and_restarting')}</p>}
+          {/* The gateway is down until it comes back on the new version: something to do meanwhile. */}
+          {restarting && <WaitGame surface="card" className="mt-3 h-[min(15rem,32dvh)]" />}
           {candidate.affordance === 'restart' && !restarting && (
             <p data-testid="update-restart-ready-note" className="mt-2 text-[12px] text-muted">
               {gwArmedVersion && !gwRestartReady
@@ -677,6 +685,7 @@ export default function UpdateFoundModal({ held = false }: { held?: boolean } = 
             </button>
           </p>
           )}
+          </div>
         </div>
 
         {/* flex-wrap: two localized buttons (de runs long) can exceed a 320px
@@ -756,7 +765,7 @@ function UpdateFoundDialog({ label, children }: { label: string; children: React
     <div
       ref={dialogRef}
       tabIndex={-1}
-      className="bg-card border border-border rounded-xl shadow-xl w-[460px] max-w-[90vw] flex flex-col overflow-hidden outline-hidden"
+      className="bg-card border border-border rounded-xl shadow-xl w-[460px] max-w-[90vw] max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden outline-hidden"
       role="dialog"
       aria-modal="true"
       aria-label={label}

@@ -1888,7 +1888,8 @@ two shapes by id. `jsonCanvas.ts` reads and writes the format:
   dashboard save (never an agent's), of a stored `canvas`, whose `expected_token`
   is the stored token. The page also sends `placeholders_token`, the token of the
   masked read its placeholders came from; when it differs from `expected_token`
-  (a "Keep mine" after a 409 saves the old draft against the live token) the
+  and the stored canvas hides a value (a "Keep mine" after a 409 saves the old
+  draft against the live token; literal placeholder text pairs nothing) the
   route answers 400 and writes nothing, because the old placeholders would pair
   with the newer version's values. Both masked-merge refusals carry a `code`
   (`masked_merge_stale` for this one, `masked_merge_refused` for an edit the merge

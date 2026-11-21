@@ -58,3 +58,37 @@ describe('the canvas edit callback across read-only transitions', () => {
     })
   })
 })
+
+describe('the save reply of a masked canvas', () => {
+  const epoch = () => vi.mocked(CanvasEditor).mock.lastCall?.[0].epoch
+  const note = () => document.querySelector('[data-testid="canvas-masked-note"]')
+
+  it('a reply that only spells the same document differently keeps the editor and its undo history', async () => {
+    const { onChange } = mount()
+    const draft = { ...initial, shapes: initial.shapes.map(s => ({ ...s, text: 'Edited' })) }
+    // The server's JSON dump spaces (and may spell numbers) differently; it masks nothing.
+    const respelled = JSON.stringify(JSON.parse(serializeCanvas(draft)))
+    expect(respelled).not.toBe(serializeCanvas(draft))
+    vi.mocked(api.updateArtifact).mockResolvedValueOnce({ content: respelled, content_token: 't2' } as Artifact)
+    const before = epoch()
+    act(() => { onChange(draft) })
+    await act(async () => { expect(await flushCanvas('board')).toBe(true) })
+    expect(epoch()).toBe(before)
+    expect(note()).toBeNull()
+  })
+
+  it('the still-saved note clears once a save masks nothing', async () => {
+    const { onChange } = mount()
+    const typed = { ...initial, shapes: initial.shapes.map(s => ({ ...s, text: 'key value' })) }
+    const shown = serializeCanvas({ ...initial, shapes: initial.shapes.map(s => ({ ...s, text: 'key [REDACTED: credential]' })) })
+    vi.mocked(api.updateArtifact).mockResolvedValueOnce({ content: shown, content_token: 't2' } as Artifact)
+    act(() => { onChange(typed) })
+    await act(async () => { expect(await flushCanvas('board')).toBe(true) })
+    expect(note()).not.toBeNull()
+    const cleared = { ...initial, shapes: initial.shapes.map(s => ({ ...s, text: 'key' })) }
+    vi.mocked(api.updateArtifact).mockResolvedValueOnce({ content: serializeCanvas(cleared), content_token: 't3' } as Artifact)
+    act(() => { onChange(cleared) })
+    await act(async () => { expect(await flushCanvas('board')).toBe(true) })
+    expect(note()).toBeNull()
+  })
+})

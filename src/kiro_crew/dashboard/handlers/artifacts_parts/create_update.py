@@ -758,13 +758,18 @@ async def api_artifact_update(request: web.Request) -> web.Response:
         ):
             # The placeholders line up only with the masked read they came from. A
             # save that names another (a "Keep mine" over a newer version) could
-            # pair a placeholder with another writer's value, so it is refused.
+            # pair a placeholder with another writer's value, so it is refused when
+            # the stored canvas hides any value; literal placeholder text pairs nothing.
             placeholders_token = body.get("placeholders_token")
             # The code tells the page which way out to offer: a stale save can
             # only reload, a refused edit can also be undone.
             code = "masked_merge_refused"
             try:
-                if placeholders_token is not None and placeholders_token != expected_token:
+                if (
+                    placeholders_token is not None
+                    and placeholders_token != expected_token
+                    and await _run_off_loop(lambda: _redact_text(stored_content) != stored_content)
+                ):
                     code = "masked_merge_stale"
                     raise MaskedMergeError(
                         "this save's hidden-text placeholders come from an older version"

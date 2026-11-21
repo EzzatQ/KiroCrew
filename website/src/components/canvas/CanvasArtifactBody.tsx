@@ -186,7 +186,11 @@ export default function CanvasArtifactBody({ artifact, isCurrent }: { artifact: 
         // was sent (a credential typed into the canvas is masked on a read), the page
         // takes it, a newer draft included, so its next save matches the server's copy.
         const reply = (saved as Artifact | undefined)?.content
-        const masked = typeof reply === 'string' && reply !== body ? parseCanvas(reply) : null
+        // Compared as parsed documents: the server's JSON may spell a number
+        // differently (1e-05 for 0.00001), which masks nothing.
+        const sent = parseCanvas(body)
+        const read = typeof reply === 'string' && reply !== body ? parseCanvas(reply) : null
+        const masked = read?.ok && sent.ok && JSON.stringify(read.canvas) !== JSON.stringify(sent.canvas) ? read : null
         const adopted = masked?.ok && draftRef.current === draft ? reply as string : null
         const kept = adopted ?? body
         baseRef.current = kept
@@ -201,12 +205,11 @@ export default function CanvasArtifactBody({ artifact, isCurrent }: { artifact: 
           ownTokens.current.clear()
           setOwn(null)
         }
-        if (masked?.ok) setMaskedSaved(true)
+        setMaskedSaved(!!masked?.ok)
         if (adopted !== null) {
           setCanvas(masked?.ok ? masked.canvas : null)
           setEpoch(e => e + 1)
         } else if (masked?.ok && draftRef.current) {
-          const sent = parseCanvas(body)
           if (sent.ok) {
             const queued = withMaskedText(draftRef.current, sent.canvas, masked.canvas)
             draftRef.current = queued
@@ -337,6 +340,7 @@ export default function CanvasArtifactBody({ artifact, isCurrent }: { artifact: 
       liveBeforeHistory.current = null
       tokenRef.current = live.content_token
       placeholdersRef.current = live.content_token
+      setMaskedSaved(false)
       ownTokens.current.clear()
       setOwn(null)
       setCanvas(next.ok ? next.canvas : null)

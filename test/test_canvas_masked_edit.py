@@ -338,6 +338,24 @@ class TestRoute:
         assert isolated_store.get("board").content == STORED
 
     @pytest.mark.asyncio
+    async def test_older_placeholders_over_a_canvas_hiding_nothing_are_written(
+        self, isolated_store, patch_restricted
+    ) -> None:
+        # Literal placeholder text pairs with no value, so "Keep mine" still saves.
+        plain = _doc(_node("a", f"note {TAG}"), _node("b", "plain"))
+        isolated_store.create(name="board", content=plain, slug="board", kind="canvas")
+        token = isolated_store.get("board").content_token
+        save = _doc(_node("a", f"note {TAG}"), _node("b", "edited"))
+        resp = await api_artifact_update(
+            _request(
+                body={"content": save, "expected_token": token, "placeholders_token": "0" * 64},
+                match={"slug": "board"},
+            )
+        )
+        assert resp.status == 200
+        assert _texts(isolated_store.get("board").content) == {"a": f"note {TAG}", "b": "edited"}
+
+    @pytest.mark.asyncio
     async def test_an_agent_write_is_not_merged(self, isolated_store, patch_restricted) -> None:
         masked, token = await self._canvas(isolated_store)
         resp = await api_artifact_update(

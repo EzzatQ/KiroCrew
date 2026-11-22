@@ -286,12 +286,23 @@ export type CrewApprovalSurface = typeof CREW_APPROVAL_SURFACES[number]
  *  *slot*'s pending tool approval. The one rule, for every surface: a Crew Mode
  *  worker's approval (a row with `crew_root`) is decided ONLY on its conductor's
  *  approval card; every other surface shows it as info with a way to that card.
- *  A session that is no worker keeps its usual controls everywhere. */
+ *  A session that is no worker keeps its usual controls everywhere.
+ *
+ *  The one exception is a security-rule override card: the server takes its
+ *  allow only from the worker's own chat, never from the conductor's card, so
+ *  the worker's own composer draws it and the card offers Reject and a way there. */
 export function crewApprovalDecidableHere(
-  slot: { crew_root?: string | null } | null | undefined, surface: CrewApprovalSurface,
+  slot: { crew_root?: string | null; pending_approval_info?: { deny_override?: string } | null } | null | undefined,
+  surface: CrewApprovalSurface,
 ): boolean {
   if (!crewRootOf(slot)) return true
+  if (crewOverrideCardPending(slot)) return surface === 'conductor_card' || surface === 'worker_main_pane' || surface === 'worker_split_pane'
   return surface === 'conductor_card'
+}
+
+/** Whether *slot*'s pending approval is a security-rule override card. */
+export function crewOverrideCardPending(slot: { pending_approval_info?: { deny_override?: string } | null } | null | undefined): boolean {
+  return slot?.pending_approval_info?.deny_override === '1'
 }
 
 /** The person's own session list: a Crew Mode root's workers are left out while

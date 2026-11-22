@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { crewApprovalDecidableHere, crewModeRoot, crewRootOf, showsAsCrewMode } from '../lib/crewMode'
+import { crewApprovalDecidableHere, crewModeRoot, crewOverrideCardPending, crewRootOf, showsAsCrewMode } from '../lib/crewMode'
 import CrewApprovalCards, { MateApprovalCards } from './crew/CrewApprovalCards'
 import MateWorkerQuestions from './crew/MateWorkerQuestions'
 import { CrewSteerUnrecordedNotice, CrewWorkerComposerGate } from './crew/CrewWorkerComposerGate'
@@ -1312,13 +1312,13 @@ export default function ChatPane({
             composer or each other's top out of the pane. */}
         {paneSlot?.mode === 'member' && (
           <div className="mx-2 mb-2 max-h-[45vh] overflow-y-auto empty:hidden" data-testid="mate-worker-prompts">
-            <MateApprovalCards root={slotKey} />
+            <MateApprovalCards root={slotKey} onOpenSession={onSessionOpen} />
             <MateWorkerQuestions key={slotKey} root={slotKey} />
           </div>
         )}
         {paneCrewRoot ? (
           <CrewWorkerComposerGate root={paneCrewRoot} worker={slotKey} workerTitle={title}
-            waitingForApproval={!!paneSlot?.pending_approval} />
+            waitingForApproval={!!paneSlot?.pending_approval && !crewOverrideCardPending(paneSlot)} />
         ) : (
           // Without the gate (a build without conductor mode, LTS) a send the server still
           // took as a steer can come back unrecorded: say so here.

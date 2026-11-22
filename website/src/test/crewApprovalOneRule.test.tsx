@@ -43,6 +43,13 @@ describe('the one rule: a worker approval is decided only on the conductor card'
     }
   })
 
+  it("lets the worker's own composer answer a security-rule override card, which the conductor's card cannot allow", () => {
+    const override = { crew_root: 'root', pending_approval_info: { deny_override: '1' } }
+    for (const surface of CREW_APPROVAL_SURFACES) {
+      expect(crewApprovalDecidableHere(override, surface)).toBe(['conductor_card', 'worker_main_pane', 'worker_split_pane'].includes(surface))
+    }
+  })
+
   it('G4: the conductor side panel shows a worker approval as info that links to the card', () => {
     const model = buildCommandCenter(sources({}))
     const items = model.attention.filter(a => a.kind === 'approval')

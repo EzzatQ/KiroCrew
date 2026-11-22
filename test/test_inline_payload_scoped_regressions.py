@@ -9,12 +9,11 @@ import itertools
 import re
 import shlex
 import sys
-import time
 
 import pytest
+from denied_commands_security_helpers import _interpreter_work, _linear_work
 from named_cases_helpers import named_cases
 
-from conftest import REDOS_SCALING_FLOOR_SECONDS, REDOS_SCALING_RATIO
 from kiro_crew import security
 from kiro_crew.security import argv_floor, inline_payload
 
@@ -681,22 +680,35 @@ class TestTheAliasBindingReadsBackFromTheHead:
         def script(heads: int) -> str:
             return "; ".join(['f = getattr(builtins, "exec")'] * heads)
 
-        def cost(heads: int) -> float:
-            view = script(heads)
+        class CountedView(str):
+            """A view that bills every character an index or a slice hands back.
+
+            A prefix search runs in C, so the instruction count sees one step per
+            head however long the copied prefix is; the slice length shows it.
+            """
+
+            read = 0
+
+            def __getitem__(self, key):  # type: ignore[override]
+                item = str.__getitem__(self, key)
+                CountedView.read += len(item)
+                return item
+
+        def work(heads: int) -> int:
+            view = CountedView(script(heads))
             spans = inline_payload._call_spans(view)
             brackets = inline_payload._argument_spans(view)
-            best = float("inf")
-            for _ in range(2):
-                start = time.thread_time()
-                table = inline_payload._callable_aliases(view, spans, brackets)
-                best = min(best, time.thread_time() - start)
-                assert table == {"f": "exec"}
-                if best < REDOS_SCALING_FLOOR_SECONDS:
-                    break
-            return best
+            tables: list[dict[str, str]] = []
+            CountedView.read = 0
+            steps = _interpreter_work(
+                lambda: tables.append(inline_payload._callable_aliases(view, spans, brackets))
+            )
+            assert tables == [{"f": "exec"}]
+            return steps + CountedView.read
 
-        small, large = cost(200), cost(2_000)
-        assert large <= max(REDOS_SCALING_RATIO * small, REDOS_SCALING_FLOOR_SECONDS), (
-            f"{large:.3f}s for 2000 heads against {small:.4f}s for 200 -- the "
-            "binding read grows faster than the script"
+        sizes = (200, 400, 600)
+        counts = [work(heads) for heads in sizes]
+        assert _linear_work(counts), (
+            f"{counts} steps and characters read at {sizes} heads -- the binding "
+            "read grows faster than the script"
         )

@@ -24,7 +24,8 @@ A command-line reader reads a flag only when one of its row's ``names`` is a wor
 the same shell command before it (back to a line break, ``|``, ``;`` or ``&``, within
 :data:`_LINE_MAX` characters). A value shorter than ``min_length``, a placeholder,
 words (``checks.reads_as_words``) or one still running at the end of a stream window
-(reported in ``opens``) is not a hit.
+(reported in ``opens``) is not a hit; a value still running past :data:`_HOLD_MAX` is
+one, to its own end (:func:`_held`).
 """
 
 from __future__ import annotations
@@ -79,10 +80,31 @@ _NETRC_PAIRS = frozenset({"login", "account"})
 _NETRC_TOKENS = 6
 # A Basic value longer than this is not decoded to look for a placeholder.
 _BASIC_DECODE_MAX = 512
+# How long a value still running at the end of a stream window is held undecided.
+_HOLD_MAX = 4096
+#: A held value's tail (``Hit.tail``) -> whether a character ends that value; a stream
+#: drops input up to the first such character (``stream.discard``).
+VALUE_ENDS: dict[str, Callable[[str], bool]] = {
+    "value:token": lambda ch: ch not in _TOKEN,
+    "value:cookie": _COOKIE_VALUE_STOPS.__contains__,
+    "value:word": _WORD_STOPS.__contains__,
+    'value:"': frozenset('"\r\n').__contains__,
+    "value:'": frozenset("'\r\n").__contains__,
+}
 
 
 class _Open(Exception):
     """The text ends before the unit is decided (non-final scans only)."""
+
+
+def _held(start: int, end: int, row: HeaderRow, detector: str, tail: str) -> Hit:
+    """A value running to the end of a non-final window: open (:class:`_Open`) below
+    :data:`_HOLD_MAX`, then a Secret whose *tail* (a :data:`VALUE_ENDS` key) runs to the
+    value's own end, so a stream emits the mask and drops the rest of the value instead
+    of holding it without bound. No placeholder check runs on it: it fails closed."""
+    if end - start < _HOLD_MAX:
+        raise _Open
+    return Hit(start, end, row.id, row.tier, detector, "known_key", tail=tail)
 
 
 def _skip(text: str, i: int, chars: str) -> int:
@@ -106,14 +128,12 @@ def _after_name(text: str, end: int) -> int | None:
     return i
 
 
-def _value(text: str, start: int, stops: frozenset[str] | None, final: bool) -> int:
+def _value(text: str, start: int, stops: frozenset[str] | None) -> int:
     """End of a value run from *start*: token characters, or up to one of *stops*."""
     i = start
     n = len(text)
     while i < n and (text[i] in _TOKEN if stops is None else text[i] not in stops):
         i += 1
-    if i == n and not final:
-        raise _Open
     return i
 
 
@@ -160,7 +180,7 @@ def _header(
     # value runs to the same far end: the shared finder and check read that run once.
     end = walk.tokens(i)
     if end == len(text) and not final:
-        raise _Open
+        return _held(i, end, row, "header", "value:token")
     if not _walk_keep(text, i, end, row, walk):
         return None
     # A scheme row's value starts after a blank, which ends any earlier value, so these
@@ -466,7 +486,8 @@ def _cookies(text: str, at: int, name: str, row: HeaderRow, final: bool, walk: _
             vs = eq + 1
             ve = walk.stops(vs)
             if ve == n and not (final or line_end < n):
-                raise _Open
+                hits.append(_held(vs, ve, row, "cookie", "value:cookie"))
+                break
             if walk.session(i, eq) and _walk_keep(text, vs, ve, row, walk):
                 hits.append(Hit(vs, ve, row.id, row.tier, "cookie", "known_key"))
             if first_only:
@@ -499,9 +520,10 @@ def _curl_user(text: str, at: int, row: HeaderRow, final: bool, walk: _Walk) -> 
     # Stops: the closing quote or a line break, else a blank or a quote. On ``-u=-u=…``
     # every anchor's value runs to the same far stop, so the shared finders read it once.
     end = (walk.quoted[quote] if quote else walk.word_stops)(i)
-    if end == len(text) and not final:
-        raise _Open
     colon = walk.colons(i)
+    if end == len(text) and not final:
+        start = colon + 1 if colon < end else i
+        return _held(start, end, row, "curl_user", f"value:{quote or 'word'}")
     if colon >= end or not _walk_keep(text, colon + 1, end, row, walk):
         return None
     return Hit(colon + 1, end, row.id, row.tier, "curl_user", "known_key")
@@ -527,7 +549,9 @@ def _word_value(text: str, i: int, row: HeaderRow, final: bool, detector: str) -
     quote = text[i] if text[i] in _QUOTES else ""
     if quote:
         i += 1
-    end = _value(text, i, frozenset(quote + "\r\n") if quote else _WORD_STOPS, final)
+    end = _value(text, i, frozenset(quote + "\r\n") if quote else _WORD_STOPS)
+    if end == len(text) and not final:
+        return _held(i, end, row, detector, f"value:{quote or 'word'}")
     if not _keep(text, i, end, row) or reads_as_words(text[i:end]):
         return None
     return Hit(i, end, row.id, row.tier, detector, "known_key")

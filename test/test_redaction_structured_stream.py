@@ -124,6 +124,73 @@ def test_a_mask_run_fed_in_pieces_is_not_held_past_its_bound(unit: str) -> None:
     assert longest < 20_000
 
 
+_HELD_LEADS = [
+    "Cookie: session=",
+    "X-Api-Key: ",
+    "Authorization: Basic ",
+    "curl -u admin:",
+    "mysql -p",
+    "machine h login u password ",
+]
+
+
+def _held_value(n: int) -> str:
+    rng = random.Random(n)
+    return "".join(rng.choice("abcdefghijkLMNOP0123456789") for _ in range(n))
+
+
+@pytest.mark.parametrize("lead", _HELD_LEADS)
+def test_an_unfinished_header_value_is_masked_at_its_bound_not_held(lead: str) -> None:
+    value = _held_value(12_000)
+    text = f"{lead}{value}; theme=dark\nafter"
+    s = StreamRedactor()
+    pieces, longest = [], 0
+    for i in range(0, len(text), 1024):
+        pieces.append(s.feed(text[i : i + 1024]))
+        longest = max(longest, len(s._pending))  # noqa: SLF001
+    out = "".join(pieces) + s.flush()
+    assert longest <= 4096 + 1024
+    assert out.startswith(f"{lead}{TAG}")
+    assert (out, s.spans) == redact(text)
+
+
+@pytest.mark.parametrize("lead", ["Cookie: session=", "X-Api-Key: "])
+def test_a_secret_split_across_the_hold_bound_never_streams_in_clear(lead: str) -> None:
+    value = _held_value(6000)
+    text = f"{lead}{value}\nafter"
+    bound = len(lead) + 4096
+    for cut in range(bound - 40, bound + 40):
+        out, _ = run_stream([text[:cut], text[cut:]])
+        assert out == f"{lead}{TAG}\nafter", f"split at {cut}"
+        assert not any(value[k : k + 12] in out for k in range(0, len(value) - 12, 97))
+
+
+@pytest.mark.parametrize("gap", [0, CONTEXT + 76])
+def test_a_key_block_after_a_held_value_on_its_line_is_still_masked(gap: int) -> None:
+    # Only the held value is dropped: the BEGIN line after it is still read, however
+    # far its line break is, and the commit cut settles.
+    body = (PEM_BODY * 3)[:644]
+    end = PEM_BEGIN.replace("BEGIN", "END")
+    chunks = ["X-Api-Key: " + "aB5nQ7" * 800, f" {PEM_BEGIN}{' ' * gap}\n{body}\n{end}\nafter"]
+    out, spans = run_stream(chunks)
+    assert body[:40] not in out
+    assert (out, spans) == redact("".join(chunks))
+
+
+def test_a_session_cookie_after_a_held_cookie_value_is_still_masked() -> None:
+    later = "session_id=" + session_token(64, seed=4)
+    text = "Cookie: session=" + _held_value(5000) + f"; {later}; theme=dark\nok"
+    out, spans = run_stream([text[:4500], text[4500:]])
+    assert later[11:] not in out
+    assert (out, spans) == redact(text)
+
+
+def test_a_value_ending_below_the_hold_bound_still_matches_whole_text() -> None:
+    text = f"X-Api-Key: {_held_value(4000)}; theme=dark\nafter"
+    pieces = [text[i : i + 1024] for i in range(0, len(text), 1024)]
+    assert run_stream(pieces) == redact(text)
+
+
 # ── Linear work on adversarial input ──
 
 

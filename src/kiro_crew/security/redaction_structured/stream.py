@@ -15,7 +15,11 @@ unit that is decided while still running (an unterminated private-key block past
 ``max_block``; a session-token run, or an encoded run with a text head, past 4 KiB) is
 replaced and the stream discards input to that unit's own end: the end of the text, or
 the end of the run.
-Chunked output and spans therefore equal the whole-text result at every split.
+Chunked output and spans therefore equal the whole-text result at every split, with one
+exception: a header, cookie or command-line value still running past 4 KiB is replaced
+from its start, even one the whole text keeps (a non-session cookie, a placeholder),
+and the stream discards input to the value's own end. Later text is then read after
+the placeholder the stream sent, not after the dropped value.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from __future__ import annotations
 from .charsets import B64STD
 from .encoded import RUN_CHARS
 from .engine import render, resolve, scan
+from .headers import VALUE_ENDS
 from .model import SECRET, TAG, TAIL_ALL, TAIL_B64RUN, TAIL_ENCRUN, Hit, Span
 
 # Look-behind kept from committed text: covers the pairing window (300 + 40 + 21),
@@ -39,11 +44,16 @@ def discard(tail: str, pad: int, chunk: str) -> tuple[int, int, bool]:
     """``(dropped, pad, done)`` for a replaced unit's continuation in ``chunk``.
 
     ``tail`` is :data:`~.model.TAIL_ALL` (the unit runs to the end of the text: drop
-    everything) or a run tail (drop the rest of the run and at most two ``=`` after it).
-    ``pad`` counts the ``=`` already dropped.
+    everything), a held value's tail (:data:`~.headers.VALUE_ENDS`: drop up to the first
+    character that ends it, which stays) or a run tail (drop the rest of the run and at
+    most two ``=`` after it). ``pad`` counts the ``=`` already dropped.
     """
     if tail == TAIL_ALL:
         return len(chunk), pad, False
+    ends = VALUE_ENDS.get(tail)
+    if ends is not None:
+        i = next((k for k, ch in enumerate(chunk) if ends(ch)), len(chunk))
+        return i, pad, i < len(chunk)
     i = 0
     if pad == 0:
         i = len(chunk) - len(chunk.lstrip(_RUN_TAILS[tail]))
@@ -97,7 +107,7 @@ class StreamRedactor:
         """Drop input belonging to a unit already replaced; return what follows it."""
         i, self._pad, done = discard(self._mode, self._pad, chunk)
         self._pos += i
-        if self._mode != TAIL_ALL:
+        if self._mode != TAIL_ALL and self._mode not in VALUE_ENDS:
             self._ctx = (self._ctx + chunk[:i])[-CONTEXT:]
         if not done:
             return ""
@@ -144,9 +154,10 @@ class StreamRedactor:
                 for h in resolved:
                     # A hit not yet committed keeps the text it was decided from
                     # (its anchor) in the window, so a later feed decides it alike.
-                    first = h.start if h.anchor < 0 else min(h.start, h.anchor)
+                    # An anchor already in the look-behind clamps to ``base``.
+                    first = max(base, h.start if h.anchor < 0 else min(h.start, h.anchor))
                     if first < cut < h.end:
-                        cut = max(base, first)
+                        cut = first
                         moved = True
         out = render(window, resolved, base, cut)
         self._record(resolved, base, cut, offset)
@@ -163,7 +174,10 @@ class StreamRedactor:
         self._open_span = (tail_hit.start + offset, tail_hit.rule_id, tail_hit.tier)
         self._mode = tail_hit.tail
         self._pad = 0
-        if self._mode != TAIL_ALL:
+        if self._mode in VALUE_ENDS:
+            # Later text is read after what was sent: the label, then the placeholder.
+            self._ctx = (window[: tail_hit.start] + TAG)[-CONTEXT:]
+        elif self._mode != TAIL_ALL:
             # The window ends inside the run: no padding has been read yet.
             self._ctx = window[-CONTEXT:]
         self._pos += len(window) - base

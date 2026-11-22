@@ -1329,7 +1329,12 @@ Two mechanisms make "the split changed nothing for a caller" a tested claim rath
   permalinks, public OAuth values such as `code` and `state`, image data URIs, SSH
   fingerprints, documentation example keys, temp paths); `protection.py` hands them
   to a later pass as masks. Every unit has a size bound and fails closed past it, so
-  `stream.py` yields the whole-text result for any split. `compat.py` is the seam
+  `stream.py` yields the whole-text result for any split. The one exception is a
+  header, cookie or command-line value still running past 4 KiB
+  (`headers._HOLD_MAX`): the stream masks it from its start, drops input to the
+  value's own end (`headers.VALUE_ENDS`) and reads what follows after the
+  placeholder it sent. It masks such a value even where the whole text keeps it
+  (a non-session cookie, a placeholder), never less. `compat.py` is the seam
   the credential plan reads (`compat.credential_plan`): the detectors read the text,
   each Secret hit's VALUE becomes a span replaced by the credential tag (a base64 or
   hex run whose decoded text holds a credential by `[REDACTED: encoded credential]`),

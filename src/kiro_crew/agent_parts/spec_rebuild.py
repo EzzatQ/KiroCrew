@@ -819,6 +819,21 @@ def rebuild_agent_config(
             ", ".join(_mount_only_removed) or "none",
         )
 
+    from kiro_crew.mcp_cleanup import mcp_entry_is_muted
+    from kiro_crew.mcp_utils import mcp_server_alias
+
+    # Every server muted in the spec being rebuilt (its own agent-local entries
+    # included) or in any source scope, read BEFORE resolution drops the ones
+    # whose command is missing. A muted server was never meant to launch, so the
+    # drop record below leaves it out; tightest-wins over the alias family, the
+    # rule ``sync_shared_server_refs`` applies to mounts and grants.
+    _muted_aliases = {
+        mcp_server_alias(srv)
+        for scope in (config.get("mcpServers") or {}, *(s for _l, s in sources.scopes))
+        if isinstance(scope, dict)
+        for srv, spec in scope.items()
+        if mcp_entry_is_muted(spec)
+    }
     resolved = mcp_sources.resolve_mcp_servers(config, sources, _resolve_command)
     # After resolution, so both entries carry the resolved command they are compared on.
     mcp_sources.reconcile_raw_key_tool_overrides(config, sources)
@@ -880,14 +895,15 @@ def rebuild_agent_config(
                 app_owned_at_start=_app_owned_at_start,
             )
             from kiro_crew import mcp_dropped_servers
-            from kiro_crew.mcp_utils import mcp_server_alias
 
             # Keep the report ordered with spec writes; aliases can still be mounted.
+            # A muted server's missing command is not a drop (``_muted_aliases``).
             mcp_dropped_servers.record_rebuild_drops(
                 {
                     key: command
                     for key, command in resolved.unresolved_commands.items()
                     if mcp_server_alias(key) not in config["mcpServers"]
+                    and mcp_server_alias(key) not in _muted_aliases
                 }
             )
         except _AgentSpecUnreadable as exc:

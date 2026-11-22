@@ -314,7 +314,7 @@ def _crew_left_out_notice(provider: Any) -> str:
         return ""
     shown = [
         (
-            f"{name} ({failures[name]})"
+            f"{name}: {failures[name]}"
             if isinstance(failures.get(name), str) and failures[name]
             else name
         )
@@ -322,9 +322,10 @@ def _crew_left_out_notice(provider: Any) -> str:
     ]
     more = len(names) - len(shown)
     one = len(names) == 1
+    # A reason holds commas of its own, so the entries are split by semicolons.
     return (
         f"⚠ This session started without MCP {'server' if one else 'servers'} "
-        + ", ".join(shown)
+        + "; ".join(shown)
         + (f" (+{more} more)" if more else "")
         + f". {'Its' if one else 'Their'} tools are missing here. Fix what "
         f"{'the reason names' if one else 'each reason names'}, then start a new chat."

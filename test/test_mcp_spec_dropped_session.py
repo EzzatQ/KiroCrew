@@ -26,7 +26,7 @@ import pytest
 
 from kiro_crew import mcp_dropped_servers
 from kiro_crew.acp.client import AcpClient
-from kiro_crew.acp.mcp_prune import spec_dropped_servers
+from kiro_crew.acp.mcp_prune import record_pruned, spec_dropped_servers
 from kiro_crew.acp.mcp_session_report import BUCKET_CAP, McpSessionReport
 from kiro_crew.acp.types import EVENT_MCP_SERVER_INIT_FAILURE
 from kiro_crew.acp_backends import (
@@ -71,6 +71,21 @@ def test_other_agents_and_a_name_the_spec_defines_read_nothing(dropped_store):
     assert spec_dropped_servers(None, None) == ()
     # A spec that still defines the name (a project-level copy) is not missing it.
     assert spec_dropped_servers("kirocrew", {"mcpServers": {"p-dead": {"command": "x"}}}) == ()
+
+
+def test_a_slashed_key_is_read_under_the_alias_the_spec_uses(tmp_path, monkeypatch):
+    """The record keeps the raw key; the spec and its ``@`` refs use the alias."""
+    from kiro_crew.mcp_utils import mcp_server_alias
+
+    monkeypatch.setattr(mcp_dropped_servers, "store_path", lambda: tmp_path / "drops.json")
+    mcp_dropped_servers.record_rebuild_drops({"npm:@playwright/mcp": _MISSING})
+    alias = mcp_server_alias("npm:@playwright/mcp")
+    assert alias != "npm:@playwright/mcp"
+
+    [server] = spec_dropped_servers("kirocrew", {"mcpServers": {}})
+    assert server.name == alias
+    # A spec that defines the alias still has the server.
+    assert spec_dropped_servers("kirocrew", {"mcpServers": {alias: {"command": "x"}}}) == ()
 
 
 def test_no_record_reads_nothing(tmp_path, monkeypatch):
@@ -190,7 +205,7 @@ def test_a_new_session_gets_one_notice_naming_the_left_out_server(notices):
     # The tag that keeps it out of the folded steps (TurnBlock.isAlwaysVisible).
     assert kw["meta"] == {"kind": "mcp_servers_left_out"}
     assert text.startswith("⚠ ")
-    assert f"p-dead (command not found: {_MISSING})" in text
+    assert f"p-dead: command not found: {_MISSING}" in text
     assert "Fix what the reason names" in text
 
 
@@ -229,6 +244,69 @@ def test_doctor_names_the_dropped_server_and_counts_an_issue(dropped_store, caps
     doctor_mcp._doctor_dropped_mcp_servers(issues)
     out = capsys.readouterr().out
     assert "'p-dead' left out of the default agent: command not found" in out
+    assert issues == ["1 MCP server(s) left out: command not found"]
+
+
+def test_a_server_the_user_turned_off_is_not_reported_as_left_out(
+    tmp_path, monkeypatch, notices, capsys, _floor_monkeypatch
+):
+    """A muted server whose command is missing was never meant to launch.
+
+    The rebuild resolves commands before it strips muted entries, so the writer
+    itself must skip them. Muted in any scope wins: here ``off-kiro`` is turned off
+    in the Kiro global only, while the dashboard store keeps an entry of the same
+    name without the flag, as ``POST /api/mcp/toggle`` leaves it.
+    """
+    from mcp_merge_helpers import bundled_defaults, run_install_mcp_merge
+
+    from kiro_crew.kiro_cli import SPEC_PERMISSIONS_MIN_VERSION
+
+    _floor_monkeypatch.setattr(
+        "kiro_crew.kiro_cli.installed_kiro_cli_version", lambda: SPEC_PERMISSIONS_MIN_VERSION
+    )
+    monkeypatch.setenv("PATH", "/usr/bin")
+    missing = {"on-missing", "off-missing", "off-kiro", "off-local"}
+    # An agent-local server, in the existing spec only and in no source scope.
+    import json
+
+    from kiro_crew.agent_files import AGENT_FILENAME
+
+    kiro_dir = tmp_path / "kiro_agents"
+    kiro_dir.mkdir()
+    (kiro_dir / AGENT_FILENAME).write_text(
+        json.dumps({"mcpServers": {"off-local": {"command": "off-local", "disabled": True}}}),
+        encoding="utf-8",
+    )
+    run_install_mcp_merge(
+        tmp_path,
+        bundled_defaults(tmp_path),
+        cc_servers={},
+        kiro_servers={
+            "on-missing": {"command": "on-missing"},
+            "off-missing": {"command": "off-missing", "disabled": True},
+            "off-kiro": {"command": "off-kiro", "disabled": True},
+        },
+        kirocrew_servers={"off-kiro": {"command": "off-kiro"}},
+        which_side_effect=lambda c, **kw: None if c in missing else c,
+    )
+
+    # Only the server the user left on is in the record and the session's read.
+    assert set(mcp_dropped_servers.load_dropped()) == {"on-missing"}
+    dropped = spec_dropped_servers("kirocrew", {"mcpServers": {}})
+    assert [s.name for s in dropped] == ["on-missing"]
+
+    report = McpSessionReport()
+    report.begin_session([])
+    record_pruned(report, dropped, 0)
+    chat_runner._notice_crew_left_out_mcp(SimpleNamespace(), SimpleNamespace(), _Provider(report))
+    [(_role, text, _cls, _kw)] = notices
+    assert "on-missing" in text
+    assert "off-" not in text
+
+    issues: list[str] = []
+    doctor_mcp._doctor_dropped_mcp_servers(issues)
+    out = capsys.readouterr().out
+    assert "off-" not in out
     assert issues == ["1 MCP server(s) left out: command not found"]
 
 

@@ -25,6 +25,7 @@ from kiro_crew.acp.mcp_session_report import McpSessionReport, sanitize_sink_tex
 from kiro_crew.acp.mcp_startable import PrunedServer, prune_unstartable
 from kiro_crew.agent_files import AGENT_FILENAME, WORKER_AGENT_FILENAME
 from kiro_crew.mcp_dropped_servers import load_dropped
+from kiro_crew.mcp_utils import mcp_server_alias
 
 # The client's logger name: these lines have always been filed under it.
 logger = logging.getLogger("kiro_crew.acp.client")
@@ -109,17 +110,23 @@ def spec_dropped_servers(agent: str | None, spec: Any) -> tuple[PrunedServer, ..
         return ()
     servers = spec.get("mcpServers") if isinstance(spec, dict) else None
     defined = servers if isinstance(servers, dict) else {}
+    # The record keeps the raw config key (``npm:@playwright/mcp``); the spec, its
+    # ``@`` refs and the session report use the slash-free alias. Keyed by alias,
+    # so the report and the ref guard name one server once.
+    by_alias: dict[str, str] = {}
+    for name, rec in sorted(dropped.items()):
+        by_alias.setdefault(mcp_server_alias(name), rec["command"])
     return tuple(
         PrunedServer(
-            sanitize_sink_text(name, MCP_REPORT_NAME_CAP),
+            sanitize_sink_text(alias, MCP_REPORT_NAME_CAP),
             sanitize_sink_text(
                 "command not found (install it, or fix the command on the MCP Servers "
-                f"page): {rec['command']}",
+                f"page): {command}",
                 MCP_REPORT_ERROR_CAP,
             ),
         )
-        for name, rec in sorted(dropped.items())
-        if name not in defined
+        for alias, command in sorted(by_alias.items())
+        if alias not in defined
     )
 
 

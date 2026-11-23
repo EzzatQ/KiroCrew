@@ -529,6 +529,10 @@ def sensitive_write_path_refusal(path_str: str, base_dir: str | None = None) -> 
             matched = under(rule_rows)
         matched = matched or _native_store_write(path_str, base_dir)
         matched = matched or _install_root_write(path_str, base_dir)
+        if not matched:  # call-time import: kept off the MCP listing path's budget
+            from kiro_crew.sandbox_git_control import git_control_write
+
+            matched = git_control_write(path_str, base_dir)
         remedy = matched and _path_in_home_dirs(path_str, _MCP_REGISTRY_ROWS, base_dir, strict=True)
     except PathResolutionStalled as exc:
         return _stall_refusal(exc, path_str)

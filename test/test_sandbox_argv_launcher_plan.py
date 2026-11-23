@@ -1370,7 +1370,9 @@ def test_a_seal_parent_is_pinned_only_when_this_uid_could_rename_it(tmp_path: Pa
 def test_every_namespace_seal_has_its_parent_pinned(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sandbox_mod, "_caller_can_rename", lambda path, uid: True)
     plan = sandbox_mod._spawn_plan(sandbox_plan.BACKEND_NAMESPACE, "strict")
-    pins = set(plan.runtime_ancestor_guards)
+    # ``pins`` (the gateway checkout's git directories) are bound over themselves
+    # before every seal, so they hold a seal's parent against rename the same way.
+    pins = set(plan.runtime_ancestor_guards) | set(plan.pins)
     assert plan.readonly
     assert [seal for seal in plan.readonly if os.path.dirname(seal) not in pins] == []
 

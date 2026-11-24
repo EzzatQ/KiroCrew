@@ -359,6 +359,22 @@ describe('App — update progress overlay', () => {
     expect(screen.getByText('Page will reconnect when ready…')).toBeInTheDocument()
   })
 
+  it('is a modal: focus stays inside and keys do not reach the page shortcuts behind it', async () => {
+    await startProgress()
+    const overlay = await screen.findByRole('dialog', { name: 'Updating Kiro Crew…' })
+    expect(overlay).toHaveAttribute('aria-modal', 'true')
+    expect(overlay.contains(document.activeElement)).toBe(true)
+    const pageKeys = vi.fn()
+    window.addEventListener('keydown', pageKeys)
+    act(() => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true, bubbles: true, cancelable: true })) })
+    window.removeEventListener('keydown', pageKeys)
+    expect(pageKeys).not.toHaveBeenCalled()
+    // With no focus stop inside it yet, Tab stays put rather than walking onto the shell.
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    act(() => { document.activeElement!.dispatchEvent(tab) })
+    expect(tab.defaultPrevented).toBe(true)
+  })
+
   it.each(['failed', 'error'] as const)('treats the %s step as terminal', async (step) => {
     // The apply worker pushes `failed` from its outer handler and `error` from
     // its per-step handlers (a fast-forward that will not apply, pip refusing

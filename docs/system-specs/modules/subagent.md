@@ -1880,7 +1880,7 @@ other harness: unchanged. Rules and fail-closed cases:
 
 On KAS with the `kas_subagents` feature preview on (default off), every chat on an agent
 Kiro Crew ships or builds (a dashboard chat, a crew member's, a cron run, a messaging
-channel's; never a conductor's) can hand in-turn fan-out to the engine's own sub-agent
+channel's; a conductor's too) can hand in-turn fan-out to the engine's own sub-agent
 tool and the in-memory `kirocrew-helper` agent (`acp/kas_engine_subagents.py`,
 [acp-client](acp-client.md)). In a person's own dashboard chat on the default agent,
 and the crew member named `default`'s own chat on it, the agent entry excludes

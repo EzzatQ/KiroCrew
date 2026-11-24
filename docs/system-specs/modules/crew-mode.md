@@ -4624,10 +4624,13 @@ parts:
   `spawn_status`, `spawn_release`, `spawn_list`, and `task_run` and
   `workflow_run`, which start work of their own;
   `mate_worker.MATE_CONDUCTOR_EXCLUDED_TOOLS`) in `excludedTools`, which both
-  engines subtract from the session's tool list, and the `kas_subagents`
-  preview never mounts KAS's own sub-agent tool on it, in any session
-  (`kas_engine_subagents.hands_work_to_sessions`, which leaves out every
-  conductor `crew_mode.conductor_agents` names too). Every other built-in stays,
+  engines subtract from the session's tool list. With the `kas_subagents`
+  preview on, KAS's own in-turn sub-agent tool mounts on it as on every other
+  KAS chat, every conductor `crew_mode.conductor_agents` names included
+  (`kas_engine_subagents.engine_subagents_on`; the 2026-11-24 decision entry on
+  conductors and the engine's sub-agents):
+  its children hold no more than the conductor's own spec, and the spawn
+  tools above stay left out. Every other built-in stays,
   `execute_bash`, `fs_write` and `code` included (RFC amendment 2026-10-23): a
   quick command or a small edit it does itself, longer work goes to a worker.
   Only a session with a member key, the Bot's own thread, can get the session

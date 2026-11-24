@@ -4668,7 +4668,11 @@ and every gap fails closed:
     `trustedAgents`. Every other harness is unchanged.
 - *Its tools.* The one agent Kiro Crew ships for the tool, `kirocrew-helper`
   (`acp/kas_engine_subagent_target.py`), exists only in memory, with no hooks. It
-  holds built-in tools and the MCP servers its parent holds
+  holds the built-in tools of its own list that the parent's spec `tools` also
+  name (`kas_engine_subagents.helper_tools`; a parent naming none gets no mount,
+  nor does a narrower parent in a chat where the engine's tool replaces the spawn
+  tools, whose registered own agents keep their own tools)
+  and the MCP servers its parent holds
   (`shared_servers`): a server of the parent's block or a pooled stub of one its
   spec declares, that the parent's `tools` mount and its `excludedTools` do not
   withdraw whole. The helper lists each as the parent's `tools` name it, carries

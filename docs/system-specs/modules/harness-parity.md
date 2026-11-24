@@ -656,7 +656,7 @@ is not sent.
 
 With the `kas_subagents` feature preview on (default off) every KAS chat on an agent Kiro
 Crew ships or builds (a dashboard chat, a crew member's, a cron run, a messaging
-channel's; never a conductor's, a Kiro Crew sub-agent run, a workflow or a heartbeat)
+channel's, a conductor's included; never a Kiro Crew sub-agent run, a workflow or a heartbeat)
 mounts the engine's own sub-agent tool with the shipped `kirocrew-helper` reachable
 (`acp/kas_engine_subagents.py:engine_subagents_on`). Only a person's own dashboard chat
 on the default agent, and the crew member named `default`'s own chat on it, also reach

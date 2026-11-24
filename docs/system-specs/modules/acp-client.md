@@ -3378,13 +3378,14 @@ spec the same way kiro-cli v2 does where the wire allows it:
   `kas_engine_subagents.kas_subagents_preview_on`): only when it is on and
   `kas_engine_subagents.engine_subagents_on` holds and the session agent is not a
   person's own file (`default_crew_servers.is_custom_agent`; that one is read as
-  kiro-cli reads it, below) (a chat of any agent Kiro Crew wrote but a conductor: a
+  kiro-cli reads it, below) (a chat of any agent Kiro Crew wrote: a
   `dashboard:` / `dashboard_` key, a crew member's, a member dispatch and
   a Crew panel included, a `cron:` / `cron_` run, or a messaging channel's chat;
-  never a conductor's chat (`hands_work_to_sessions`: a Bot's own conductor
-  `kirocrew-mate-conductor`, whose chat starts no sub-agent, and every agent
-  `crew_mode.conductor_agents` names, which dispatches each work item to a
-  session), never a Kiro Crew sub-agent run, a workflow, a task runner or a heartbeat; and
+  a conductor's chat too, a Bot's own conductor `kirocrew-mate-conductor` and every
+  agent `crew_mode.conductor_agents` names
+  (the 2026-11-24 decision entry on conductors and the engine's sub-agents),
+  whose spec keeps the tools it leaves out;
+  never a Kiro Crew sub-agent run, a workflow, a task runner or a heartbeat; and
   the chat-runtime-sharing preview off, because the sharing check
   `chat_runtime_sharing.spec_grants_native_subagents` reads the spec on disk and
   not this mount), the session agent's entry gains `invoke_sub_agent` in `tools`
@@ -3421,10 +3422,16 @@ spec the same way kiro-cli v2 does where the wire allows it:
   `toolsSettings` of any tool but the shell (`_only_held_tools_settings`: the
   shell's deny rules travel on every sub-agent's entry, and the gate stamps its
   allowlist, read-only flag and the denies only it refuses on every native
-  sub-agent's request, `test_kas_engine_child_parent_settings.py`), a `tools` or
-  `allowedTools` narrower than the helper's)
+  sub-agent's request, `test_kas_engine_child_parent_settings.py`), a `tools` that
+  names none of the helper's built-ins, or an `allowedTools` narrower than the
+  helper's)
   refuses the mount, and that chat keeps Kiro Crew's own sub-agents exactly as on
-  main. A mount records one `kas_engine_subagent_mounted` security event (source
+  main. A `tools` that names only some of them is mirrored instead in every chat
+  that keeps both spawn tools: the helper holds those built-ins alone
+  (`kas_engine_subagents.helper_tools`), so a conductor with no file-writing tool
+  gets a helper with none. Where the engine's tool replaces the spawn tools
+  (`engine_replaces_spawn`) such a spec still refuses the mount, because the
+  person's own agents registered there keep their own tools. A mount records one `kas_engine_subagent_mounted` security event (source
   `kas_agent_projection`) naming the agent, how many of its rules the helper
   carries and how many of its MCP servers it holds
   (`kas_subagent_targets.audit_subagent_policy`). An accepted mount also

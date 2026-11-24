@@ -2,7 +2,7 @@
 
 On (``dashboard.feature_previews.kas_subagents`` is ``true``, set under Settings >
 Developer > Feature previews): in the chats :func:`engine_subagents_on` names
-(never a conductor's, :func:`hands_work_to_sessions`), the chat agent's projected
+(a conductor's included), the chat agent's projected
 entry mounts KAS's own sub-agent tool (``invoke_sub_agent``) naming the shipped helper (``acp/kas_engine_subagent_target.py``). Only in the chats
 :func:`engine_replaces_spawn` names do the person's own agents the target projection
 registers join it (:func:`_held_children`) and ``spawn_run`` and ``spawn_sub_agents``
@@ -168,11 +168,12 @@ def engine_subagents_on(
 ) -> bool:
     """Whether this KAS session's agent mounts the engine's sub-agent tool.
 
-    True for a chat of any agent but a conductor with the ``kas_subagents`` preview
-    on: a person's dashboard chat (``dashboard:`` / ``dashboard_`` keys, a crew
-    member's, a member dispatch and a Crew panel included), a cron run (``cron:`` /
-    ``cron_``) and a messaging channel's chat. Never a conductor's chat, a Bot's own
-    thread among them (:func:`hands_work_to_sessions`), never a Kiro Crew sub-agent
+    True for a chat of any agent with the ``kas_subagents`` preview on: a person's
+    dashboard chat (``dashboard:`` / ``dashboard_`` keys, a crew member's, a member
+    dispatch and a Crew panel included), a cron run (``cron:`` / ``cron_``) and a
+    messaging channel's chat. A conductor's chat too, a Bot's own thread on its
+    conductor included: its spec keeps every tool it leaves out, so the helper holds
+    no more than it does. Never a Kiro Crew sub-agent
     run, a workflow, a task runner or a heartbeat session, and never while the
     chat-runtime-sharing preview is on: a chat whose agent can start native
     sub-agents keeps its own process
@@ -186,29 +187,9 @@ def engine_subagents_on(
     return (
         kas_subagents_preview_on(cfg)
         and bool(agent)
-        and not hands_work_to_sessions(agent)
         and _is_chat_key(session_key)
         and not chat_runtime_sharing_enabled(cfg)
     )
-
-
-def hands_work_to_sessions(agent: str) -> bool:
-    """Whether *agent* is a conductor, which hands its work to sessions, never to a sub-agent.
-
-    A Bot's own conductor (``mate_worker.MATE_CONDUCTOR_AGENT``) starts no sub-agent:
-    its hand-off is a worker session, so its spec leaves out Kiro Crew's spawn tools
-    (``mate_worker.MATE_CONDUCTOR_EXCLUDED_TOOLS``) and the spawn gate refuses it
-    (``subagent_parts.agent_policy.conductor_spawn_refusal``). Every conductor
-    ``crew_mode.conductor_agents`` names (the shipped conductor templates, the
-    configured ``agent.crew_mode_agent`` and its aliases) dispatches each work item
-    to a session it can verify and report on. The engine's tool would give each an
-    in-turn sub-agent beside that dispatch, so none of them mounts it. Read from the
-    agent alone, the one fact the batch and the contract renderer share.
-    """
-    from kiro_crew.crew_mode import conductor_agents
-    from kiro_crew.mate_worker import MATE_CONDUCTOR_AGENT
-
-    return agent == MATE_CONDUCTOR_AGENT or agent in conductor_agents()
 
 
 def _is_chat_key(session_key: str) -> bool:
@@ -512,11 +493,12 @@ def unmirrored_restriction(parent_spec: Any) -> str:
     What has no mirror refuses the mount, so the session stays on Kiro Crew's own
     sub-agents exactly as on main: a spec that is not readable, ``excludedTools``
     naming any built-in, ``toolsSettings`` of any tool but the shell
-    (:func:`_only_held_tools_settings`), a ``tools`` that does not reach every
-    helper built-in, or an ``allowedTools`` that does not run unasked everything
-    the helper runs unasked.
+    (:func:`_only_held_tools_settings`), a ``tools`` that reaches none of the
+    helper's built-ins, or an ``allowedTools`` that does not run unasked everything
+    the helper runs unasked. A ``tools`` that reaches only some of them is mirrored:
+    the helper holds those alone (:func:`helper_tools`).
     """
-    from kiro_crew.acp.kas_engine_subagent_target import _HELPER_ALLOWED, _HELPER_TOOLS
+    from kiro_crew.acp.kas_engine_subagent_target import _HELPER_ALLOWED
     from kiro_crew.platform.tool_names import canonical_kiro_cli_tool_name
 
     if not isinstance(parent_spec, dict):
@@ -536,11 +518,30 @@ def unmirrored_restriction(parent_spec: Any) -> str:
             return "its excludedTools withdraw a built-in"
     if not _only_held_tools_settings(parent_spec.get("toolsSettings")):
         return "it sets toolsSettings"
-    if not _reaches_all(parent_spec.get("tools"), _HELPER_TOOLS, _ALL_BUILTINS_TOOLS):
-        return "its tools do not include every built-in the helper holds"
+    if not helper_tools(parent_spec):
+        return "its tools include none of the built-ins the helper holds"
     if not _reaches_all(parent_spec.get("allowedTools"), _HELPER_ALLOWED, _ALL_BUILTINS_ALLOWED):
         return "its allowedTools do not run unasked what the helper runs unasked"
     return ""
+
+
+def helper_tools(parent_spec: Any) -> tuple[str, ...]:
+    """The helper's built-ins that the session agent's spec ``tools`` also reach.
+
+    The helper never holds a built-in its parent does not: a parent that lists only
+    some of them gets a helper with those alone. Read by name, as the spec lists
+    them, so a parent naming a built-in by an alias or a ``@builtin/`` reference
+    reaches none.
+    """
+    raw = parent_spec.get("tools") if isinstance(parent_spec, dict) else None
+    return tuple(t for t in _helper_builtins() if _reaches_all(raw, (t,), _ALL_BUILTINS_TOOLS))
+
+
+def _helper_builtins() -> tuple[str, ...]:
+    """Every built-in the shipped helper can hold."""
+    from kiro_crew.acp.kas_engine_subagent_target import _HELPER_TOOLS
+
+    return _HELPER_TOOLS
 
 
 #: The shell settings every native sub-agent is held to as its parent is. A
@@ -641,7 +642,9 @@ def with_engine_subagents(
 
     The person's own agents *own_agents* registers join the batch too, held as
     :func:`_held_children` says, and the mount's deny spares their ids. It is
-    called only once the mount is accepted.
+    called only once the mount is accepted. With *replace_spawn*, a parent whose
+    ``tools`` do not reach every helper built-in gets no mount: an own agent keeps its
+    own tools, and the chat keeps both spawn tools as before.
 
     The helper runs inside the session agent's turn, so that agent's own spec
     PreToolUse hooks meet its requests: its entry withholds auto-approval for what
@@ -668,6 +671,15 @@ def with_engine_subagents(
     if unmirrored:
         logger.info("KAS sub-agents stay off for %s: %s", agent, unmirrored)
         return custom_agents
+    tools = helper_tools(parent_spec)
+    if replace_spawn and tools != _helper_builtins():
+        # Where the engine's tool would replace the spawn tools, the person's own
+        # agents join it and keep their own tools, which a narrower parent lacks:
+        # that chat keeps Kiro Crew's own sub-agents instead.
+        logger.info(
+            "KAS sub-agents stay off for %s: its tools are narrower than the helper's", agent
+        )
+        return custom_agents
     # Before the helper is built, so it excludes their servers as a target's.
     children = _held_children(own_agents, parent)
     custom_agents = [*custom_agents, *children]
@@ -686,6 +698,7 @@ def with_engine_subagents(
         session_key=session_key,
         settings_dir=settings_dir,
         other_servers=others,
+        tools=tools,
     )
     if not isinstance(parent_spec, dict):  # refused above; narrows the type
         return custom_agents
@@ -729,7 +742,6 @@ __all__ = [
     "contract_names_engine_subagents",
     "engine_replaces_spawn",
     "engine_subagents_on",
-    "hands_work_to_sessions",
     "kas_subagents_preview_on",
     "parent_refuses_helper",
     "unmirrored_restriction",

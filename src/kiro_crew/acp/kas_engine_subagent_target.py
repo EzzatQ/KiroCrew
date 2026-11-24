@@ -112,8 +112,12 @@ def helper_tool_rules() -> tuple[str, ...]:
     return tuple(found)
 
 
-def helper_spec() -> dict[str, Any]:
-    """The helper's agent spec, in kiro-cli's shape, built fresh on every call."""
+def helper_spec(tools: Iterable[str] = _HELPER_TOOLS) -> dict[str, Any]:
+    """The helper's agent spec, in kiro-cli's shape, built fresh on every call.
+
+    *tools* are the built-ins it holds: :data:`_HELPER_TOOLS`, or the ones of them
+    its parent's ``tools`` also reach (the mount's ``helper_tools``).
+    """
     return {
         "name": KAS_HELPER_AGENT,
         # The engine lists this line under its sub-agent tool, where the parent
@@ -124,7 +128,7 @@ def helper_spec() -> dict[str, Any]:
             "agent's MCP servers (no Kiro Crew tool) and reports the result back."
         ),
         "prompt": "\n\n".join((_HELPER_PROMPT, "\n".join(helper_tool_rules()))),
-        "tools": list(_HELPER_TOOLS),
+        "tools": list(tools),
         "allowedTools": list(_HELPER_ALLOWED),
         "mcpServers": {},
         "includeMcpJson": False,
@@ -256,10 +260,12 @@ def helper_entry(
     session_key: str,
     settings_dir: str | Path | None,
     other_servers: Iterable[str] = (),
+    tools: Iterable[str] = _HELPER_TOOLS,
 ) -> dict[str, Any]:
     """The helper's projected ``customAgents`` entry for this session.
 
-    Projected through the same translation as every other agent
+    Built from :func:`helper_spec` holding *tools*, projected through the same
+    translation as every other agent
     (``kas_agents.build_kas_custom_agents``), then given its parent's servers
     (:func:`shared_servers`). Every other server that could reach it is excluded
     whole: Kiro Crew's own, the pooled stubs and the parent's block servers it
@@ -271,7 +277,7 @@ def helper_entry(
     from kiro_crew.acp.kas_settings_mcp import stamp_settings_mcp
     from kiro_crew.acp.kas_subagent_targets import _excluding_switched_off
 
-    spec = helper_spec()
+    spec = helper_spec(tools)
     [entry] = kas_agents_mod.build_kas_custom_agents(
         agents_dir,
         KAS_HELPER_AGENT,

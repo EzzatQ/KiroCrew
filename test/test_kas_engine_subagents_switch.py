@@ -226,7 +226,11 @@ _RESTRICTIONS = [
         {"toolsSettings": {"web_fetch": {"blocked": ["https://x.example/*"]}}},
         "refused",
     ),
+    # Refused in this chat, where the engine's tool replaces the spawn tools; a chat
+    # that keeps them mounts a helper holding only the built-ins the parent lists
+    # (test_a_narrower_parent_gets_a_helper_with_only_its_own_built_ins).
     ("narrower_tools", {"tools": ["fs_read", "grep", "@kirocrew-core"]}, "refused"),
+    ("no_helper_builtin_tools", {"tools": ["session", "report", "@kirocrew-core"]}, "refused"),
     ("aliased_tools", {"tools": ["fsRead", "fsWrite", "@kirocrew-core"]}, "refused"),
     ("narrower_allowed", {"allowedTools": ["grep", "@kirocrew-core"]}, "mirrored"),
     ("no_allowed", {"allowedTools": []}, "mirrored"),
@@ -329,6 +333,23 @@ async def test_every_parent_restriction_is_mirrored_or_refuses_the_mount(
         parent.get("permissions")
     ), kind
     assert not helper.get("_crewAnsweredBuiltins"), kind
+
+
+@pytest.mark.asyncio
+async def test_a_narrower_parent_gets_a_helper_with_only_its_own_built_ins(agents_dir, setting):
+    _write(agents_dir, {**_default_spec(), "tools": ["execute_bash", "fs_read", "@kirocrew-core"]})
+    setting(True)
+    # A cron run keeps both spawn tools beside the engine's.
+    batch = _by_id(await _batch(key="cron:job-1"))
+    assert "invoke_sub_agent" in batch["kirocrew"]["tools"]
+    held = set(batch[_HELPER]["tools"])
+    assert held <= set(batch["kirocrew"]["tools"])
+    # No write, search or code tool the parent does not list.
+    assert not held & {"fs_write", "write", "grep", "glob", "code", "web_search", "web_fetch"}
+    narrow = engine.helper_tools({"tools": ["execute_bash", "fs_read"]})
+    assert narrow == ("fs_read", "execute_bash")
+    assert engine.helper_tools({"tools": "*"}) == engine.helper_tools({"tools": ["*"]})
+    assert len(engine.helper_tools({"tools": "*"})) == 8
 
 
 @pytest.mark.asyncio

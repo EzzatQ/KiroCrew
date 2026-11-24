@@ -4,9 +4,9 @@ A person's dashboard chat, a crew member's chat, a member dispatch, a Crew
 panel, a cron run and a messaging channel's chat all mount it on the chat's own
 agent entry when that agent is one Kiro Crew wrote (a person's own agent file is
 read as kiro-cli reads it), and the shipped helper carries that entry's denies, so the parent's
-deny reaches the child in each. A conductor's chat never mounts it, a Bot's own
-thread on its conductor included: a conductor hands its work to sessions. Only a
-person's own dashboard chat on the shipped
+deny reaches the child in each. A conductor's chat mounts it too, a Bot's own
+thread on its conductor included, and the child holds no more than the conductor's
+own spec. Only a person's own dashboard chat on the shipped
 default agent, and the member named ``default``'s own chat on it, drop
 ``spawn_run`` and ``spawn_sub_agents``. Off or never set, every chat kind projects
 the batch of before the preview, and no session start writes an agent file.
@@ -120,8 +120,23 @@ async def _batch_of_before(monkeypatch, agent: str, key: str, **kw) -> dict[str,
         return await _batch(agent, key, **kw)
 
 
+def _assert_child_held_to(batch: dict[str, dict], before: dict[str, dict], agent: str) -> None:
+    """The conductor mounts the tool, and its child holds no more than its own spec."""
+    parent, child = batch[agent], batch[_HELPER]
+    assert "invoke_sub_agent" in parent["tools"]
+    # The conductor keeps every tool its spec leaves out: no spawn tool comes back.
+    assert set(before[agent].get("excludedTools") or []) <= set(parent.get("excludedTools") or [])
+    # Every deny and ask of the conductor is on the child too.
+    held = [r for r in _rules(parent) if r.get("effect") in ("deny", "ask")]
+    assert all(r in _rules(child) for r in held if r.get("capability") != "subagent")
+    # No Kiro Crew tool, no built-in the conductor lacks, no MCP server it lacks.
+    assert not any(isinstance(t, str) and t.startswith("@") for t in child["tools"])
+    assert set(child["tools"]) <= set(parent["tools"])
+    assert set(child.get("mcpServers") or {}) <= set(parent.get("mcpServers") or {})
+
+
 @pytest.mark.asyncio
-async def test_a_bots_fresh_conductor_chat_gets_no_engine_sub_agent_mount(
+async def test_a_bots_conductor_chat_mounts_the_engine_tool_held_to_its_own_spec(
     agents_dir, setting, monkeypatch
 ):
     # A Bot's own thread runs on its conductor, spec'd as the default template with
@@ -130,38 +145,70 @@ async def test_a_bots_fresh_conductor_chat_gets_no_engine_sub_agent_mount(
     conductor = {
         **_spec(MATE_CONDUCTOR_AGENT),
         "excludedTools": list(MATE_CONDUCTOR_EXCLUDED_TOOLS),
+        "mcpServers": {"own": {"command": "echo"}},
     }
     _write(agents_dir, conductor)
     setting(True)
     key = "dashboard:member-ada"
     batch = await _batch(MATE_CONDUCTOR_AGENT, key, member_dispatch=True)
-    assert _HELPER not in batch
-    assert "invoke_sub_agent" not in batch[MATE_CONDUCTOR_AGENT]["tools"]
     before = await _batch_of_before(monkeypatch, MATE_CONDUCTOR_AGENT, key, member_dispatch=True)
-    assert batch == before
-    assert engine.contract_engine_subagent_mode(PROVIDER_LABEL_KAS, MATE_CONDUCTOR_AGENT, key) == ""
+    assert _HELPER not in before
+    _assert_child_held_to(batch, before, MATE_CONDUCTOR_AGENT)
+    assert _PARENT_DENY in _rules(batch[_HELPER])
+    excluded = batch[MATE_CONDUCTOR_AGENT]["excludedTools"]
+    assert all(t in excluded for t in MATE_CONDUCTOR_EXCLUDED_TOOLS)
+    mode = engine.contract_engine_subagent_mode(PROVIDER_LABEL_KAS, MATE_CONDUCTOR_AGENT, key)
+    assert mode == "beside"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("agent", _CONDUCTORS)
 @pytest.mark.parametrize("chat", sorted(_CHATS))
-async def test_no_conductor_chat_mounts_the_engine_tool(
+async def test_every_conductor_chat_mounts_the_engine_tool_held_to_its_own_spec(
     agents_dir, setting, monkeypatch, chat, agent
 ):
-    # Every built-in the helper holds, so only the conductor's identity keeps it off.
     _write(agents_dir, _spec())
     _write(agents_dir, _spec(agent))
     setting(True)
     key, kw = _CHATS[chat]
     batch = await _batch(agent, key, **kw)
-    assert _HELPER not in batch, chat
-    assert batch == await _batch_of_before(monkeypatch, agent, key, **kw), chat
-    assert engine.contract_engine_subagent_mode(PROVIDER_LABEL_KAS, agent, key) == "", chat
+    before = await _batch_of_before(monkeypatch, agent, key, **kw)
+    assert _HELPER in batch and _HELPER not in before, chat
+    _assert_child_held_to(batch, before, agent)
+    assert engine.contract_engine_subagent_mode(PROVIDER_LABEL_KAS, agent, key) == "beside", chat
+
+
+_SHIPPED_CONDUCTOR_INSTALLERS = {
+    "kirocrew-conductor": "_install_conductor_agent",
+    "kirocrew-ledger-conductor": "_install_ledger_conductor_agent",
+    "kirocrew-pipeline-conductor": "_install_pipeline_conductor_agent",
+    "kirocrew-security-conductor": "_install_security_conductor_agent",
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("agent", sorted(_SHIPPED_CONDUCTOR_INSTALLERS))
+async def test_a_shipped_ultra_mode_conductor_mounts_a_helper_with_only_its_own_built_ins(
+    agents_dir, setting, monkeypatch, agent
+):
+    # The spec as the product's own installer writes it: no file-writing tool.
+    from kiro_crew.agent_materialization import conductor_agents
+
+    monkeypatch.setattr(agent_mod, "kiro_agents_dir_path", lambda: agents_dir)
+    _write(agents_dir, _spec())
+    assert getattr(conductor_agents, _SHIPPED_CONDUCTOR_INSTALLERS[agent])() is True
+    spec = json.loads((agents_dir / f"{agent}.json").read_text(encoding="utf-8"))
+    setting(True)
+    batch = await _batch(agent, "dashboard:t1")
+    before = await _batch_of_before(monkeypatch, agent, "dashboard:t1")
+    _assert_child_held_to(batch, before, agent)
+    assert set(engine.helper_tools(spec)) <= set(spec["tools"])
+    assert not {"fs_write", "code"} & set(batch[_HELPER]["tools"])
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("chat", sorted(_CHATS))
-async def test_the_configured_conductor_mode_agent_mounts_no_engine_tool(
+async def test_the_configured_conductor_mode_agent_mounts_the_engine_tool(
     agents_dir, setting, monkeypatch, chat
 ):
     from types import SimpleNamespace
@@ -174,12 +221,12 @@ async def test_the_configured_conductor_mode_agent_mounts_no_engine_tool(
     _write(agents_dir, _spec(configured))
     setting(True)
     key, kw = _CHATS[chat]
+    assert configured in crew_mode.conductor_agents()
     batch = await _batch(configured, key, **kw)
-    assert _HELPER not in batch, chat
-    assert batch == await _batch_of_before(monkeypatch, configured, key, **kw), chat
-    assert engine.contract_engine_subagent_mode(PROVIDER_LABEL_KAS, configured, key) == "", chat
-    # The default agent's chat of the same kind still mounts it.
-    assert _HELPER in await _batch("kirocrew", key, **kw), chat
+    before = await _batch_of_before(monkeypatch, configured, key, **kw)
+    _assert_child_held_to(batch, before, configured)
+    mode = engine.contract_engine_subagent_mode(PROVIDER_LABEL_KAS, configured, key)
+    assert mode == "beside", chat
 
 
 @pytest.mark.asyncio
@@ -223,7 +270,7 @@ async def test_the_member_named_default_drops_both_spawn_tools_on_the_default_ag
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("value", [None, False], ids=["unset", "off"])
-@pytest.mark.parametrize("agent", ["kirocrew", "kirocrew-research", "mine"])
+@pytest.mark.parametrize("agent", ["kirocrew", "kirocrew-research", "mine", *_CONDUCTORS])
 @pytest.mark.parametrize("chat", sorted(_CHATS))
 async def test_off_every_chat_kind_projects_the_batch_of_before(
     agents_dir, setting, monkeypatch, chat, agent, value
@@ -269,6 +316,25 @@ async def test_a_session_start_with_the_preview_on_writes_no_agent_file(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("agent", _CONDUCTORS)
+@pytest.mark.parametrize("chat", sorted(_CHATS))
+async def test_a_conductor_session_start_with_the_preview_on_writes_no_agent_file(
+    agents_dir, setting, tmp_path, chat, agent
+):
+    project = tmp_path / "project"
+    (project / ".kiro" / "agents").mkdir(parents=True)
+    _write(agents_dir, _spec())
+    _write(agents_dir, _spec(agent))
+    _write(agents_dir, _spec("mine"))
+    _write(project / ".kiro" / "agents", _spec("mine"))
+    setting(True)
+    before = _snapshot(agents_dir, project / ".kiro")
+    key, kw = _CHATS[chat]
+    assert _HELPER in await _batch(agent, key, work_dir=str(project), **kw)
+    assert _snapshot(agents_dir, project / ".kiro") == before
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("chat", sorted(_CHATS))
 async def test_a_persons_own_agents_run_as_children_only_where_the_spawn_tools_go(
     agents_dir, setting, chat
@@ -282,6 +348,25 @@ async def test_a_persons_own_agents_run_as_children_only_where_the_spawn_tools_g
     excluded = batch["kirocrew"].get("excludedTools") or []
     replaced = all(t in excluded for t in _SPAWN)
     assert ("fine" in batch) is replaced, chat
+
+
+@pytest.mark.asyncio
+async def test_a_narrower_parent_never_reaches_a_wider_own_agent(agents_dir, setting, monkeypatch):
+    # A person's own agent keeps its own tools, so a parent without them never reaches it.
+    _write(agents_dir, {**_spec(), "tools": ["fs_read", "execute_bash", "@kirocrew-core"]})
+    _write(agents_dir, {"name": "writer", "prompt": "p", "tools": ["fs_write"]})
+    setting(True)
+    # Where the engine's tool would replace the spawn tools: no mount, both kept.
+    batch = await _batch("kirocrew", "dashboard:t1")
+    assert batch == await _batch_of_before(monkeypatch, "kirocrew", "dashboard:t1")
+    assert not any(t in (batch["kirocrew"].get("excludedTools") or []) for t in _SPAWN)
+    # Where the spawn tools stay: the helper alone, holding only the parent's built-ins.
+    cron = await _batch("kirocrew", "cron:job-1")
+    assert _HELPER in cron and "writer" not in cron
+    assert "fs_write" not in cron[_HELPER]["tools"]
+    # The same own agent joins a parent that holds every helper built-in.
+    _write(agents_dir, _spec())
+    assert "writer" in await _batch("kirocrew", "dashboard:t1")
 
 
 @pytest.mark.parametrize(("agent", "own"), [("kirocrew", False), ("mine", True)])

@@ -17,5 +17,7 @@
  * Level 14 opens a batch of backend SDK names, among them `vet_public_url`,
  * `UrlRejectedError`, `VettedUrl` and `address_is_not_public`: the gateway's outbound
  * public-address check for a URL, or a resolved address, an app's backend fetches.
+ * Level 14 also adds `sniff_raster_mime` and `RASTER_SNIFF_BYTES`: the gateway's
+ * raster sniffer, by reference.
  */
 export const APP_SDK_LEVEL = 14

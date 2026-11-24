@@ -2,10 +2,10 @@
 
 An app backend that needs a host control with no ``ctx`` seam (a sensitive-path
 check, a no-follow read, outbound redaction, an audit row, a sandboxed child, a
-process or file-lock helper, the public-address check for a URL it fetches) otherwise
-looks up a private ``kiro_crew`` name by string. Those names move between releases,
-so each lookup is a gap that keeps a wheel copy alive. This package is the stable
-spelling of the most-used of them.
+process or file-lock helper, the public-address check for a URL it fetches, a
+media-type sniff) otherwise looks up a private ``kiro_crew`` name by string. Those
+names move between releases, so each lookup is a gap that keeps a wheel copy alive.
+This package is the stable spelling of the most-used of them.
 
 **Reachable from both backend kinds.** An in-process app (``backend.hooks``) and a
 spawned one (``backend.entryPoint`` on the gateway's interpreter, the default once
@@ -45,6 +45,7 @@ if TYPE_CHECKING:
         ensure_owner_only_dir,
         read_bytes_nofollow,
     )
+    from kiro_crew.apps.backend_sdk.media import RASTER_SNIFF_BYTES, sniff_raster_mime  # noqa: F401
     from kiro_crew.apps.backend_sdk.paths import (  # noqa: F401
         contains_sensitive_path,
         is_sensitive_path,
@@ -88,6 +89,8 @@ _LAZY_EXPORTS: dict[str, str] = {
     "atomic_write": "files",
     "ensure_owner_only_dir": "files",
     "read_bytes_nofollow": "files",
+    "RASTER_SNIFF_BYTES": "media",
+    "sniff_raster_mime": "media",
     "contains_sensitive_path": "paths",
     "is_sensitive_path": "paths",
     "IS_LINUX": "process",
@@ -117,6 +120,8 @@ _LAZY_EXPORTS: dict[str, str] = {
 #: The adoption pin tool (``scripts/adoption_pin.py``) counts a tree's use of a name
 #: at this level, so a host older than the name keeps the wheel copy.
 _EXPORT_LEVELS: dict[str, int] = {
+    "RASTER_SNIFF_BYTES": 14,
+    "sniff_raster_mime": 14,
     "UrlRejectedError": 14,
     "VettedUrl": 14,
     "address_is_not_public": 14,

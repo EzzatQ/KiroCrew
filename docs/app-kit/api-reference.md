@@ -2571,8 +2571,8 @@ dashboard's `appWebOriginStatus(name)`, and level 12 adds
 [`SessionChanges` and `DiffView`](#session-changes-and-diff-view), level 13 adds
 [`useBrowserSites`](#browser-sites) and `/api/apps/<name>/browser-sites`, and level 14
 adds the backend SDK's outbound URL check (`vet_public_url`, `UrlRejectedError`,
-`VettedUrl` and `address_is_not_public`, see
-[Backend SDK](#backend-sdk-kiro_crewappsbackend_sdk)); each level
+`VettedUrl` and `address_is_not_public`) and raster sniff (`sniff_raster_mime` and
+`RASTER_SNIFF_BYTES`), see [Backend SDK](#backend-sdk-kiro_crewappsbackend_sdk); each level
 includes every level below it. Several seams share level 7, three share level 8,
 level 10 is shared by the seams of the batch it opens, and level 14 by the backend SDK
 names of the batch it opens, so an app that needs one feature-detects it, never the
@@ -2585,8 +2585,8 @@ The dashboard exports the same number as `APP_SDK_LEVEL`.
 
 The host controls your backend's own Python may call when no `ctx` seam fits: a
 sensitive-path check, a no-follow read, an atomic write, outbound redaction, an audit
-row, a sandboxed child process, the cross-platform process and lock helpers and the
-public-address check for a URL your backend fetches. Each
+row, a sandboxed child process, the cross-platform process and lock helpers, the
+public-address check for a URL your backend fetches and a media-type sniff. Each
 name calls the control the Gateway itself enforces, so a check tightened in a later
 release reaches your app with the upgrade. Use these instead of a private `kiro_crew`
 name: a private name moves between releases, and these do not.
@@ -2638,6 +2638,7 @@ does not say which batch member a host has: `getattr(sdk, "vet_public_url", None
 | `UrlRejectedError` | Level 14. Raised by `vet_public_url`. `.code` is `"invalid_url"` (not an absolute `http(s)` URL, or one carrying credentials) or `"blocked_url"` (a well-formed URL the address, port or host rule refused, or one that did not resolve). |
 | `VettedUrl` | Level 14. What `vet_public_url` returns: `url` (normalized, fragment stripped), `scheme`, `host` (for TLS and the `Host` header), `wire_host` (the name your HTTP client hands its resolver), `port`, `ip` (the first address), `addresses` (every approved address, in resolver order, without repeats) and `domain` (`host` without a leading `www.`). |
 | `address_is_not_public(address)` | Level 14. `True` when an address you resolved yourself (a redirect hop, say) must be refused: anything that is not a globally reachable unicast address, an IPv4-mapped or 6to4 spelling included. A value that is not an IP literal also answers `True`. |
+| `sniff_raster_mime(head)`, `RASTER_SNIFF_BYTES` | Level 14. The raster type a file's leading bytes start with (`"image/png"`, `"image/jpeg"`, `"image/gif"`, `"image/webp"` or `"image/bmp"` today), or `None`. It decides from the bytes, never from a filename or a declared type: SVG is never an answer, and a RIFF file that is not WebP (a WAVE, say) is `None`. Pass at least `RASTER_SNIFF_BYTES` leading bytes; a longer buffer answers the same. The answer says what the bytes are, not what to accept: check it against your own allowlist, so a type the Gateway learns to sniff later does not widen what your app takes. On a gateway without it, refuse the file rather than trust its name. |
 
 The sandbox has no option to show a hidden directory or open a sealed one for
 writing, and the URL check has no option to allow another port or a private address:

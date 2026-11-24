@@ -20,7 +20,9 @@ it; and the SDK's ``useBrowserSites``, whose add asks the owner in the dashboard
 Level 14 adds the backend SDK's ``vet_public_url``, ``UrlRejectedError``,
 ``VettedUrl`` and ``address_is_not_public``: the gateway's outbound public-address
 check for a URL, or a resolved address, an app's backend fetches. The seams of the
-batch level 14 opens share it.
+batch level 14 opens share it. Level 14 also adds the backend SDK's
+``sniff_raster_mime`` and ``RASTER_SNIFF_BYTES``: the gateway's own raster sniffer,
+by reference.
 """
 
 APP_SDK_LEVEL = 14

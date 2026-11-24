@@ -688,6 +688,61 @@ def test_the_pin_tool_checks_out_without_the_operators_git_config(tmp_path, monk
             },
             {"kiro_crew.apps.backend_sdk": 7},
         ),
+        (
+            {},
+            {
+                "backend/_host.py": (
+                    "from kiro_crew.apps import backend_sdk as sdk\nsdk.sniff_raster_mime(b'')\n"
+                )
+            },
+            {
+                "kiro_crew.apps.backend_sdk": 7,
+                "kiro_crew.apps.backend_sdk.sniff_raster_mime": 14,
+            },
+        ),
+        (
+            {},
+            {
+                "backend/_host.py": "from kiro_crew.apps import backend_sdk as sdk\n",
+                "backend/domain/images.py": (
+                    "from .._host import sdk\nWINDOW = sdk.RASTER_SNIFF_BYTES\n"
+                ),
+            },
+            {
+                "kiro_crew.apps.backend_sdk": 7,
+                "kiro_crew.apps.backend_sdk.RASTER_SNIFF_BYTES": 14,
+            },
+        ),
+        (
+            {},
+            {
+                "backend/_host.py": (
+                    "SNIFF_BYTES = 16\n"
+                    "def sniff_raster_mime(head):\n"
+                    "    return _host_attr('kiro_crew.messaging.raster', 'sniff_raster_mime')(head)\n"
+                )
+            },
+            {},
+        ),
+        (
+            {},
+            {
+                "tests/fakehost.py": (
+                    "import kiro_crew.apps.backend_sdk\n"
+                    "def sniff_raster_mime(head):\n"
+                    "    return None\n"
+                )
+            },
+            {},
+        ),
+        (
+            {},
+            {
+                "tests/fakehost.py": "import kiro_crew.apps.backend_sdk\n",
+                "backend/_host.py": "def sniff_raster_mime(head):\n    return None\n",
+            },
+            {},
+        ),
         ({}, {"backend/manifest.py": "def f(manifest):\n    return manifest.lifecycle\n"}, {}),
         ({}, {"tests/fakehost.py": "ctx.turns = None\n"}, {}),
         ({}, {"backend/test_seams.py": "ctx.turns = None\n"}, {}),
@@ -759,6 +814,24 @@ def test_the_pin_tool_refuses_level_one_for_a_tree_that_uses_level_two(monkeypat
         _measure_tree(monkeypatch, tmp_path / "a", tool, files, 1)
     row = _measure_tree(monkeypatch, tmp_path / "b", tool, files, 2)
     assert row["minAppSdkLevel"] == 2
+
+
+def test_the_pin_tool_holds_a_tree_using_the_raster_sniffer_at_level_fourteen(
+    monkeypatch, tmp_path
+):
+    tool = _pin_tool(monkeypatch)
+    files = {
+        "backend/_host.py": (
+            "import importlib\n"
+            "def sniff(head):\n"
+            "    sdk = importlib.import_module('kiro_crew.apps.backend_sdk')\n"
+            "    return sdk.sniff_raster_mime(head)\n"
+        )
+    }
+    with pytest.raises(SystemExit, match="--min-sdk-level 14"):
+        _measure_tree(monkeypatch, tmp_path / "a", tool, files, 7)
+    row = _measure_tree(monkeypatch, tmp_path / "b", tool, files, 14)
+    assert row["minAppSdkLevel"] == 14
 
 
 def test_the_pin_tool_keeps_level_one_for_a_tree_without_newer_seams(monkeypatch, tmp_path):

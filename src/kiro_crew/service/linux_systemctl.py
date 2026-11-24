@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from kiro_crew.gateway_lock import LIVE_HOLDER_EXIT_CODE
 from kiro_crew.service.common import SERVICE_NAME, systemctl_user_env
@@ -528,8 +529,57 @@ def _start_limit_line(state: _UnitState) -> str | None:
     )
 
 
+def _exec_start_line(state: _UnitState) -> str | None:
+    """One line saying the LOADED unit starts the installer's venv while an
+    in-app update installed a newer tree, with the command that points the unit
+    at it, or ``None``.
+
+    The installer installs into the fixed legacy ``crew-venv`` and points
+    ``crew-venv-current`` at it. An update installs the next version beside it
+    and repoints only the link, so a unit whose program lies in the legacy tree
+    keeps starting the version the installer put there. The remedy runs the
+    linked tree's own ``service install``, which writes its path through the
+    link. Same reading as :func:`_stale_unit_line`: the manager's loaded value,
+    read-only, a loaded unit of ours only, and no claim when ``systemctl``
+    printed no program or the link names the legacy tree itself.
+    """
+    if state.load != "loaded" or not state.ours:
+        return None
+    from kiro_crew.platform.wheel_engine_layout import managed_venv_layout
+
+    loaded = _loaded_property("ExecStart", user=state.scope == "user") or ""
+    # Printed as `{ path=<program> ; argv[]=<program> <args> ; ... }`.
+    program = loaded.partition("path=")[2].partition(" ;")[0].strip()
+    if not program:
+        return None
+    layout = managed_venv_layout()
+    legacy = Path(os.path.realpath(layout.legacy))
+    linked = Path(os.path.realpath(layout.stable_link))
+    resolved = Path(os.path.realpath(program))
+    if linked == legacy or not resolved.is_relative_to(legacy):
+        return None
+    stable = layout.stable_link / resolved.relative_to(legacy)
+    if not (layout.is_managed_tree(layout.stable_link) and stable.is_file()):
+        return None
+    if state.scope == "system":
+        # Not `sudo`: a root HOME resolves another data home, and the re-render
+        # then names the versioned tree rather than the link.
+        remedy = f"run `{stable} service install`, which asks for sudo itself"
+    else:
+        where = f" in {state.fragment}" if state.fragment else ""
+        remedy = (
+            f"point `ExecStart=`{where} at `{stable}`, then run `systemctl --user daemon-reload`"
+        )
+    return (
+        f"the loaded unit starts `{program}` from the installer's venv, which in-app "
+        f"updates never change, so every service start runs the version installed "
+        f"there, not `{linked.name}`: {remedy}."
+    )
+
+
 def _stale_unit_lines(state: _UnitState) -> list[str]:
-    """Every way the scope's LOADED unit lags this build's: :func:`_stale_unit_line`
-    and :func:`_start_limit_line`, each when it has something to say."""
-    lines = (_stale_unit_line(state), _start_limit_line(state))
+    """Every way the scope's LOADED unit lags this build's: :func:`_stale_unit_line`,
+    :func:`_start_limit_line` and :func:`_exec_start_line`, each when it has
+    something to say."""
+    lines = (_stale_unit_line(state), _start_limit_line(state), _exec_start_line(state))
     return [line for line in lines if line is not None]

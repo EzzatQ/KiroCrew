@@ -26,6 +26,7 @@ from service_helpers import (  # noqa: F401 -- fixtures are found by name
     _restart_settle_without_waiting,
 )
 
+from kiro_crew.platform_compat import IS_POSIX
 from kiro_crew.service.common import (
     RESTART_NOT_UP,
     RESTART_REFUSED,
@@ -1074,6 +1075,66 @@ class TestLinuxStatusNamesAStaleLoadedUnit:
             for user_scope in (False, True):
                 rendered = svc_linux.render_unit(user_scope=user_scope).splitlines()
                 assert f"RestartPreventExitStatus={svc_linux.LIVE_HOLDER_EXIT_CODE}" in rendered
+
+
+@pytest.mark.skipif(not IS_POSIX, reason="the managed venv layout is POSIX-only")
+class TestLinuxStatusNamesAUnitStartingTheInstallerVenv:
+    """``service status`` names a LOADED ``ExecStart`` program in the legacy
+    ``crew-venv`` once ``crew-venv-current`` names a tree an in-app update
+    installed, with the command that points the unit through the link."""
+
+    @pytest.fixture(autouse=True)
+    def _not_root(self, _floor_monkeypatch, tmp_path):
+        from kiro_crew.service import linux as svc_linux
+
+        _floor_monkeypatch.setattr(svc_linux.os, "geteuid", lambda: 1000, raising=False)
+        _floor_monkeypatch.setenv("USER", "tester")
+        _floor_monkeypatch.setattr(svc_linux, "UNIT_PATH", tmp_path / "system" / _UNIT)
+        user_unit = tmp_path / ".config" / "systemd" / "user" / _UNIT
+        _floor_monkeypatch.setattr(svc_linux, "user_unit_file_path", lambda: user_unit)
+
+    @staticmethod
+    def _status(system_program):
+        """``status()`` with the system unit loaded, starting *system_program*."""
+        from kiro_crew.service import linux as svc_linux
+
+        fake = _fake_systemctl(system=_RUNNING, user=None)
+
+        def run(argv, *a, **k):
+            tokens = list(argv)
+            if "show" in tokens and "ExecStart" in tokens and "--user" not in tokens:
+                body = (
+                    f"ExecStart={{ path={system_program} ; argv[]={system_program} gateway "
+                    "--no-open ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; "
+                    "pid=0 ; code=(null) ; status=0/0 }\n"
+                )
+                return subprocess.CompletedProcess(tokens, 0, body, "")
+            return fake(argv, *a, **k)
+
+        with patch("kiro_crew.service.linux.subprocess.run", side_effect=run):
+            return svc_linux.status()
+
+    def test_a_unit_starting_the_legacy_tree_is_named_once_an_update_moved_the_link(
+        self, _floor_monkeypatch, tmp_path
+    ):
+        legacy, update = tmp_path / "crew-venv", tmp_path / "crew-venv-2.0"
+        for tree in (legacy, update):
+            (tree / "bin").mkdir(parents=True)
+            (tree / "bin" / "kirocrew").write_text("", encoding="utf-8")
+        link = tmp_path / "crew-venv-current"
+        link.symlink_to(legacy)
+        _floor_monkeypatch.setenv("KIROCREW_VENV", str(legacy))
+        program, stable = legacy / "bin" / "kirocrew", link / "bin" / "kirocrew"
+        phrase = "which in-app updates never change"
+
+        assert phrase not in self._status(program)
+        link.unlink()
+        link.symlink_to(update)
+        named = [line for line in self._status(program).splitlines() if phrase in line]
+        assert len(named) == 1, named
+        assert f"`{program}`" in named[0] and "`crew-venv-2.0`" in named[0], named
+        assert f"`{stable} service install`" in named[0], named
+        assert phrase not in self._status(stable)
 
 
 class TestLinuxStatusNamesALoadedStartLimitOtherThanTheUnits:

@@ -8196,10 +8196,12 @@ Writers: `apps/bot_grants.py`, `apps/routes_bot_grants.py`, `apps/manifest_secti
 ## 33. Former built-in adoption
 
 A built-in app that moves to its own repository keeps working for everyone who
-already has it. A release that pins the app still ships its wheel copy; on a host
+already has it. A release that pins the app first ships its wheel copy too; on a host
 whose record is builtin-owned, the gateway swaps the record **in place** onto the
 pinned repository tree, keeping `data/`, `.app_secret`, the approved grants and
-`enabled`. A host that cannot adopt keeps running the wheel copy unchanged. Core
+`enabled`. A host that cannot adopt keeps running the wheel copy unchanged. A later
+release may delete the wheel copy and keep the pin row, and adoption then runs from
+the row alone ("A pin row with no wheel copy" below). Core
 names no app anywhere in this machinery but one stated place, the row keys of
 `apps/legacy_state_moves` ("A legacy state move holds the swap" below): the pin table
 is data, and `test_builtin_adoption_pins.py` fails on a shipped built-in name in any
@@ -8282,7 +8284,11 @@ authored. `builtin_adoption_pins.load_adoption_pins` reads it once per process; 
 bad row is dropped, a duplicated name drops every row with it, more than 64 rows
 or an unreadable file is an empty table, which is today's behaviour. A
 first-adoption pin's `version` must equal the wheel built-in's (D12, so a
-one-release downgrade is data-safe).
+one-release downgrade is data-safe) while the wheel ships one; a row whose wheel copy
+is gone has no wheel version to match. `adoption_pin.py` runs the same tree checks the
+gateway runs, so for such a row it checks without a wheel manifest, carries
+`legacyNav` from the row (no wheel page is left to read it from), and refuses a name
+that is neither shipped nor pinned.
 
 **The wheel copy stops being the place to fix a pinned app.** An adopted host runs
 the pinned repository tree, so a change made only to the wheel copy
@@ -8311,7 +8317,9 @@ commit, so a wheel-copy change that lands after that event is not caught until t
 next one. Whoever approves a pin PR therefore edits its body (or pushes) right before
 approving, which re-runs the check against the current tip. The comparison reads
 trees only (`git diff-tree`), so the named commit must be in the head's or the base
-tip's history, and an unreadable one fails closed.
+tip's history, and an unreadable one fails closed. A row whose app has no non-test
+wheel-copy file at the base tip needs no line (`git_wheel_copy_ships`): with the copy
+deleted there is nothing left for the pin to fall behind.
 
 **Who owns the pinned repositories.** The first-party app repositories a pin
 names live under `KiroCrewCaptain`, the Kiro Crew team's GitHub bot account, and
@@ -8327,7 +8335,9 @@ is no record and the name is marked `adopted` (uninstalled after adoption). A us
 app shadowing the name is not released: it keeps today's stand-down behaviour. A pinned name with
 no record and no marker is a fresh install and is NOT released:
 `register_builtin_apps` registers the built-in as today, and that record then
-adopts through STAGE and APPLY exactly like an upgrading host's. A record that cannot be read, a path occupied by something
+adopts through STAGE and APPLY exactly like an upgrading host's. Once the wheel copy
+is gone there is nothing to register, so such a host has no record and the app is an
+ordinary registry install. A record that cannot be read, a path occupied by something
 else, or a swap in flight (`_update_in_progress`) keeps today's behaviour. It can
 only remove first-party status, never grant it. It gates:
 
@@ -8429,6 +8439,25 @@ newer Kiro Crew is needed (`needs_newer_sdk`, or a `host_*` ledger reason), a
 restart switches it (a `staged` ledger for the pin commit, the only state APPLY
 consumes), it is on hold (`blocked`), or it switches in the background. Only the
 `staged` wording mentions a restart.
+
+**A pin row with no wheel copy.** A release may delete a pinned app's wheel copy and
+keep its pin row; core, its tests and `adoption_pin.py` treat that as a normal state,
+and the row alone carries the adoption. An adopted record is unaffected: it already
+runs the pinned tree from the data home, and STAGE skips it. A builtin-owned record
+(a host that never adopted) has no shipped code left to run and holds no first-party
+status (`is_builtin_app`, `builtin_app_names`), but its name is pinned, so it is not
+an orphan and nothing cleans up its `data/` (a retired-builtin uninstall refuses with
+`not_orphaned`). STAGE and APPLY run for it as for any builtin-owned record, so the
+restart after a staged fetch swaps it in place, keeping `data/`, `.app_secret`, the
+approved grants and `enabled`; E9 compares against the record's own `app.json` copy.
+Every check that reads the wheel copy finds none and answers as for an unreadable
+wheel manifest: D12 compares no version, a pinned tree that declares `mcpServers` is
+refused (`pinned_feature_unsupported`, "A stdio MCP server through adoption" below),
+and the own-server grant and the `agentTools` listing of an adopted record, whose
+ceilings are the wheel copy's declarations, name nothing. Dropping the row as well
+makes a still-pending record an orphan. Pinned by
+`test/test_builtin_adoption_no_wheel_copy.py`, which deletes the fixture app's wheel
+package and keeps its row.
 
 **STAGE** (`builtin_adoption_apply.staging_pass`, kicked by
 `_kick_builtin_adoption_staging` after the listener serves) never mutates a record.

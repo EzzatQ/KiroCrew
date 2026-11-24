@@ -3,7 +3,9 @@
 An adopted host runs the app's own repository at its pin, against this core, and the
 wheel copy is that repository's twin (PR Hygiene holds them equal). So a ``kiro_crew``
 name the copy imports that the core lacks is a name the adopted app cannot import
-either, and the app breaks on that host.
+either, and the app breaks on that host. A pin row can outlive its wheel copy (the
+copy is deleted, the row kept); such an app has no twin here to read, so only the
+pinned apps the wheel still ships are checked.
 """
 
 from __future__ import annotations
@@ -58,11 +60,17 @@ def _resolves(module: str, name: str | None) -> bool:
     return True
 
 
-@pytest.mark.parametrize("app", sorted(adoption_pin_names()))
+def _wheel_copy(app: str) -> Path:
+    return _BUILTINS / app.replace("-", "_")
+
+
+# The manifest, not the directory: a deleted copy can leave a ``__pycache__`` behind.
+@pytest.mark.parametrize(
+    "app",
+    sorted(app for app in adoption_pin_names() if (_wheel_copy(app) / "app.json").is_file()),
+)
 def test_an_adopted_app_finds_every_core_name_it_imports(app: str) -> None:
-    root = _BUILTINS / app.replace("-", "_")
-    assert root.is_dir(), f"{app} has a pin but no wheel copy under {_BUILTINS}"
-    imports = _core_imports(root)
+    imports = _core_imports(_wheel_copy(app))
     assert imports, f"{app} imports nothing from the core, so this check reads nothing"
     missing = [
         f"{site} {module}:{name}" for module, name, site in imports if not _resolves(module, name)

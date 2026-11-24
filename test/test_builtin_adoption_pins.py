@@ -351,16 +351,23 @@ def test_the_shipped_pin_file_validates_and_pins_exactly_the_shipped_table():
 
 
 def test_every_shipped_pin_matches_its_wheel_built_in_version():
-    """D12: a first-adoption pin carries the wheel built-in's version (downgrade-safe)."""
+    """D12: a first-adoption pin carries the wheel built-in's version (downgrade-safe).
+
+    A pin row can outlive its wheel copy (the copy is deleted, the row kept); such a
+    row has no wheel version to match, as the gateway's own check has none to ask.
+    """
     from kiro_crew.apps.execution import _shipped_builtin_apps
 
     shipped = {}
     for root, name in _shipped_builtin_apps():
         shipped[name] = json.loads((root / "app.json").read_text(encoding="utf-8"))["version"]
     document = json.loads((_SRC / "apps" / "adoption-pins.json").read_text(encoding="utf-8"))
-    for pin in parse_adoption_pins(document).values():
-        assert pin.name in shipped
-        assert pin.version == shipped[pin.name]
+    mismatched = {
+        pin.name: (pin.version, shipped[pin.name])
+        for pin in parse_adoption_pins(document).values()
+        if pin.name in shipped and pin.version != shipped[pin.name]
+    }
+    assert mismatched == {}
 
 
 def test_the_package_ships_the_pin_file():
@@ -394,12 +401,19 @@ _STATED_NAME_EXCEPTIONS: dict[str, frozenset[str]] = {
 
 
 def _builtin_identifiers() -> set[str]:
+    """Every built-in name and package dir, and every pinned name with its package spelling.
+
+    The pinned names keep the census whole once a wheel copy is deleted and its pin row kept.
+    """
     from kiro_crew.apps.builtins import BUILTIN_NAMES
     from kiro_crew.apps.execution import _shipped_builtin_apps
 
     names = set(BUILTIN_NAMES)
     for root, name in _shipped_builtin_apps():
         names |= {name, root.name}
+    document = json.loads((_SRC / "apps" / "adoption-pins.json").read_text(encoding="utf-8"))
+    for name in parse_adoption_pins(document):
+        names |= {name, name.replace("-", "_")}
     return names
 
 
@@ -680,8 +694,8 @@ def test_the_pin_tool_never_lets_a_level_fall_below_what_the_tree_uses(monkeypat
     assert "ctx.turns" not in tool._sdk_level_refusal(NAME, 2, uses)
 
 
-def _measure_tree(monkeypatch, tmp_path, tool, files, level):
-    """``_measure`` end to end on a local tree, with the network and the E-checks stubbed."""
+def _serve_tree(monkeypatch, tmp_path, tool, files=None):
+    """Stub the pin tool's network with a local tree; ``(tree, archive)``."""
     import hashlib
     import shutil
 
@@ -696,12 +710,66 @@ def _measure_tree(monkeypatch, tmp_path, tool, files, level):
 
     monkeypatch.setattr(tool, "_clone", lambda _r, _c, dest: shutil.copytree(tree, dest))
     monkeypatch.setattr(tool, "_download", fake_download)
-    monkeypatch.setattr(tool, "_shipped", lambda _name: (tree, repository_manifest()))
-    monkeypatch.setattr(tool, "pinned_tree_refusal", lambda *_args, **_kwargs: None)
+    return tree, archive
+
+
+def _work(tmp_path):
     work = tmp_path / "work"
     work.mkdir()
+    return work
+
+
+def _measure_tree(monkeypatch, tmp_path, tool, files, level):
+    """``_measure`` end to end on a local tree, with the network and the E-checks stubbed."""
+    from builtin_adoption_helpers import repository_manifest
+
+    tree, _archive = _serve_tree(monkeypatch, tmp_path, tool, files)
+    monkeypatch.setattr(tool, "_shipped", lambda _name: (tree, repository_manifest()))
+    monkeypatch.setattr(tool, "pinned_tree_refusal", lambda *_args, **_kwargs: None)
     pin = _parse([_row(minAppSdkLevel=level)])[NAME]
-    return tool._measure(pin, work)
+    return tool._measure(pin, _work(tmp_path))
+
+
+def test_the_pin_tool_verifies_a_pin_whose_wheel_copy_is_gone(monkeypatch, tmp_path, capsys):
+    """The row is the one record left: the checks run with no wheel copy, as STAGE runs them."""
+    import hashlib
+
+    from kiro_crew.apps.builtin_adoption_fetch import adoption_tree_digest
+
+    tool = _pin_tool(monkeypatch)
+    tree, archive = _serve_tree(monkeypatch, tmp_path, tool)
+    monkeypatch.setattr(tool, "_shipped", lambda _name: None)
+    asked = []
+    real_refusal = tool.pinned_tree_refusal
+
+    def refusal(*args, **kwargs):
+        asked.append(kwargs["shipped_manifest"])
+        return real_refusal(*args, **kwargs)
+
+    monkeypatch.setattr(tool, "pinned_tree_refusal", refusal)
+    row = _row(
+        treeSha256=adoption_tree_digest(tree), archiveSha256=hashlib.sha256(archive).hexdigest()
+    )
+    table = tmp_path / "adoption-pins.json"
+    table.write_text(json.dumps({"schemaVersion": 1, "pins": [row]}), encoding="utf-8")
+    monkeypatch.setattr(tool, "_PINS_PATH", table)
+
+    assert tool._verify() == 0, capsys.readouterr().err
+    assert asked == [None]
+    # ``compute`` measures a draft whose nav is a placeholder; the row's nav is carried.
+    draft = _parse([_row(legacyNav={"route": "/x", "icon": "X"})])[NAME]
+    assert tool._measure(draft, _work(tmp_path))["legacyNav"] == row["legacyNav"]
+
+
+def test_the_pin_tool_refuses_a_name_neither_shipped_nor_pinned(monkeypatch, tmp_path):
+    tool = _pin_tool(monkeypatch)
+    _serve_tree(monkeypatch, tmp_path, tool)
+    monkeypatch.setattr(tool, "_shipped", lambda _name: None)
+    table = tmp_path / "adoption-pins.json"
+    table.write_text(json.dumps({"schemaVersion": 1, "pins": []}), encoding="utf-8")
+    monkeypatch.setattr(tool, "_PINS_PATH", table)
+    with pytest.raises(SystemExit, match="no shipped built-in and no pin row"):
+        tool._measure(_parse([_row()])[NAME], _work(tmp_path))
 
 
 def test_the_pin_tool_refuses_level_one_for_a_tree_that_uses_level_two(monkeypatch, tmp_path):

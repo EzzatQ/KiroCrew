@@ -28,6 +28,7 @@ from kiro_crew.sandbox_precreate import (
     _CREW_PRECREATE_READONLY_FILE_LEAVES,
     _EMPTY_CEILING_DOCUMENT,
 )
+from kiro_crew.sandbox_tiers import _resolved_mate_ledger_targets
 from kiro_crew.terminal_safe import safe_terminal_line
 
 # Logged under the sandbox's name, which operator log filters, level settings
@@ -224,6 +225,30 @@ def _materialize_kiro_mcp_registry() -> list[str]:
             created.append(target)
         elif not os.path.lexists(target):
             # Absent after a failed publish, so nothing raced in: really unsealed.
+            logger.warning("could not create %s to seal it read-only", safe_terminal_line(target))
+    return created
+
+
+def _materialize_mate_ledger() -> list[str]:
+    """Create an absent Bot-move ledger as ``{}`` so the Linux seal has a file to bind.
+
+    The record first appears at the first Bot move, which can come after a sandbox
+    started, and ``mount(2)`` cannot seal a name nothing occupies. Every reader
+    (``mate_config_migration._read_ledger``, ``mate_held_rules._held_entries``) reads
+    ``{}`` as an absent ledger, and its writer rewrites it in place, so the seal placed
+    now holds every later save. Only under a kiro home that exists, ``mates`` made 0o700
+    when missing. Never raises: a ledger that cannot be created is logged.
+    """
+    created: list[str] = []
+    for target in _resolved_mate_ledger_targets():
+        mates = os.path.dirname(target)
+        if os.path.lexists(target) or not os.path.isdir(os.path.dirname(mates)):
+            continue
+        with contextlib.suppress(OSError):  # a failed mkdir fails the publish below
+            os.mkdir(mates, 0o700)
+        if _publish_empty_ceiling(target, mates):
+            created.append(target)
+        elif not os.path.lexists(target):  # absent after a failed publish: nothing raced in
             logger.warning("could not create %s to seal it read-only", safe_terminal_line(target))
     return created
 

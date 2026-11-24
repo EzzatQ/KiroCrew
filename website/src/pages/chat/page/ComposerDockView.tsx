@@ -187,7 +187,6 @@ interface ComposerDockViewProps {
   composerRef: RefObject<ComposerHandle>
   composerVoiceOptions: ComposerVoiceOptions
   isMac: boolean
-  cancelUpload: () => void
   composerUploadFiles: (files: File[]) => Promise<void> | undefined
   dropTargetProps: ReturnType<typeof useChatPageResourcesController>['dropTargetProps']
   handleCapture: () => Promise<void>
@@ -195,9 +194,6 @@ interface ComposerDockViewProps {
   handleOptimizeResult: (slot: string | null, optimized: string) => void
   search: ReturnType<typeof useChatPageResourcesController>['search']
   tabsCtl: ReturnType<typeof useChatPageResourcesController>['tabsCtl']
-  /** Live uploads `cancelUpload` aborts: above zero the control is offered,
-   *  above one its label names the count. */
-  uploadCount: number
   sendHeld: boolean
   composerBandRef: (el: HTMLDivElement | null) => void
   scrollBottom: (instant?: boolean) => void
@@ -354,8 +350,8 @@ export default function ComposerDockView({
   codexPairModels, filteredModels, hiddenModelsQ, ownModelsFailed, ownModelsFetching, retryOwnModels, modelsBackend, jevRouteOn, modelDropdown, modelDropdownRef, modelFilter, modelInputRef, modelPickerConfigured, modelPickerReturnsFocusRef, setModelDropdown,
   setModelFilter, onAgentListKeyDown, onModelListKeyDown, anchorModelBtn, modelBtnRect, messageQuote, onJumpToQuote, applyAutomationChange, automation, automationCreationReady, automationOpen,
   automationSnapshotFailed, setAutomationOpen, prefillHint, setPrefillHint, pasteSlice, pendingFiles, pendingSessions, resizedInfo, unstageSessionRef, uploading, agentBtnRect, anchorAgentBtn,
-  projectPickerOpen, setProjectPickerOpen, anchorProjectBtn, projectBtnRect, pendingDirs, composerRef, composerVoiceOptions, isMac, cancelUpload, composerUploadFiles, dropTargetProps, handleCapture,
-  handleFileOpen, handleOptimizeResult, search, tabsCtl, uploadCount, sendHeld, composerBandRef, scrollBottom, handleResumeSession, composerRootChange, composerUserEdit, followUpMulti,
+  projectPickerOpen, setProjectPickerOpen, anchorProjectBtn, projectBtnRect, pendingDirs, composerRef, composerVoiceOptions, isMac, composerUploadFiles, dropTargetProps, handleCapture,
+  handleFileOpen, handleOptimizeResult, search, tabsCtl, sendHeld, composerBandRef, scrollBottom, handleResumeSession, composerRootChange, composerUserEdit, followUpMulti,
   followUpOptions, followUpPicked, followUpPickedRef, followUpSourceKey, toggleFollowUpOption, dashCfg, jevAutoConsented, refusedPress, setRefusedPress, send, composerSend, pickModel, setProject, projectSwitching, switchAgent,
   currentSlot, activeFolderName, anchorSessionControl, openSessionControl, refreshSessionControlStatuses, sessionControlKey, sessionControlRect, sessionControls, setOpenSessionControl,
   activeAgentName, attachmentAnnouncement, clampOutOfTokens, handleAddToContext, mentionKeyEdit, optimizerMentionGuard, mentionEditRange, removeDirChip, removeFileChip, selectPickedFile, followupAddToSession,
@@ -705,11 +701,8 @@ export default function ComposerDockView({
               onDismissHint={() => setPrefillHint(false)}
               onScreenshot={handleCapture}
               onUploadFiles={composerUploadFiles}
-              /* Only while the active slot has a live upload request, whichever
-                 host started it. `uploading` is shared with the screenshot
-                 path, which has no request to cancel. */
-              onCancelUpload={uploadCount > 0 ? cancelUpload : undefined}
-              uploadCount={uploadCount}
+              /* The active slot's uploads in flight, whichever host started
+                 them, each a chip with its own cancel. */
               uploadSlot={activeSlot}
               /* The one collapsible composer. Opt-in rather than default so the
                  shared preference key and the window-level expand event stay

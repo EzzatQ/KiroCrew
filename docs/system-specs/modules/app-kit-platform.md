@@ -8455,9 +8455,10 @@ orphan. Pinned by `test/test_builtin_adoption_no_wheel_copy.py`, which deletes t
 fixture app's wheel package and keeps its row.
 
 Every other core path that reads the wheel copy to decide a limit or a grant finds
-none. The table names each, what it does then, and which way it fails. Each row is an
-open blocker for deleting the copies of the apps it names, and none is handled yet;
-row 6 fails OPEN, so dev-fleet's copy must not be deleted before it is fixed.
+none. The table names each, what it does then, and which way it fails. Rows 1 to 9
+are open blockers for deleting the copies of the apps they name, and none is handled
+yet; row 6 fails OPEN, so dev-fleet's copy must not be deleted before it is fixed.
+Row 10 blocks nothing.
 
 | # | Read of the wheel copy | With no wheel copy | Direction | Apps it blocks |
 |---|---|---|---|---|
@@ -8465,11 +8466,12 @@ row 6 fails OPEN, so dev-fleet's copy must not be deleted before it is fixed.
 | 2 | the own-server grant (`builtin_adoption_gate.adopted_app_own_mcp_servers`, with the wheel agent map `execution.builtin_app_agents`) | grants nothing: an adopted app's calls to its own servers ask, and an unattended run is refused when its card expires | fail-closed | auto-improvement, mochi |
 | 3 | the `agentTools` ceiling (`app_agent_tools._adopted_first_party_apps`, `_within_wheel_copy`) | an adopted app's tools are not listed, and a call is refused as `unknown_tool` (`dashboard/handlers/app_agent_tools.py`, `mcp_tools/app_tools.py`) | fail-closed | design-tweak, dev-fleet, issue-radar, ops-mission-control |
 | 4 | the gate's `app-own-tools` row (`own_agent_tools.gate_grants`: the wheel agent map and the wheel `agentTools`) | approves nothing, so the app's own agent's calls to its own tools ask | fail-closed | the apps of row 3 |
-| 5 | the built-in seam providers (`seams._load_builtin_seams` imports `builtins/<package>/seams.py` only) | design-critique's worker slot mode leaves `chat_handlers._CREATABLE_MODES` (read once at import): `POST /api/chat/slots` refuses the mode unless the app may hide sessions, and a send that recreates the slot drops it to `""`. aws-control's `crew_runtime`, `aws_account_policy` and `transfer_staging` answer None, so their core callers degrade or refuse. auto-research's `stopped_loop_tombstone` answers None, so a stopped campaign loop's row is removed, unless its adopted tree registers the provider from its own startup hook | breaks (fail-closed) | design-critique, aws-control, auto-research |
+| 5 | the built-in seam providers (`seams._load_builtin_seams` imports `builtins/<package>/seams.py` only) | design-critique's worker slot mode leaves `chat_handlers._CREATABLE_MODES` (read once at import): `POST /api/chat/slots` refuses the mode unless the app may hide sessions, and a send that recreates the slot drops it to `""`. aws-control's `crew_runtime`, `aws_account_policy` and `transfer_staging` answer None, so their core callers degrade or refuse | breaks (fail-closed) | design-critique, aws-control |
 | 6 | the built-in host grants (`builtin_host_grants.builtin_host_grants` imports `builtins/<package>/host_grants.py` only) | dev-fleet's two pod-token mint routes leave `kiro_relay.limits`' relay credential set, so a relayed caller is **no longer refused** there; its five `/pod/*` routes leave the strict internal set and refuse the internal-secret caller; its BUILD rlimit, `KIROCREW_DEVFLEET_*` forwarding and `dev_fleet` config key go | **fail-open** (relay refusal); fail-closed (strict paths) | dev-fleet |
 | 7 | the record's `app.json` copy and approved grants, which `register_builtin_apps` rewrites from the wheel at every start | both stay as the host's last release left them, and E9 compares the pin with that copy: a host last booted on a release whose copy lacks a grant the pin declares gets `permission_widening` at every pass, which no later pass can clear | fail-closed, permanent | spec-builder, dev-fleet |
 | 8 | not a wheel read: `registry_pipeline/install._adoption_pending` with `builtin_adoption.pending_install_refusal` | when STAGE is refused (rows 1 and 7), the builtin-owned record runs no code and an App Store install is refused `adoption_pending` with a message saying the app "stays a built-in app", which no longer holds: a dead end | fail-closed, no way out | the apps of rows 1 and 7 |
 | 9 | the built-in leg of `credential_masks` (`_builtin_manifests`) and `agent_readonly_dirs` | the built-in declarations go; the installed leg (the record's `app.json`) stays, so an adopted record keeps its masks and read-only dirs | narrows to the installed declaration | spec-builder |
+| 10 | auto-research's `stopped_loop_tombstone`, the one other provider the same loader imports | its adopted tree registers the provider itself from `on_startup`, for the life of the gateway process. Only a process where that hook never ran (the app disabled from boot until the stop, or a never-adopted host before APPLY) has none: `_keeps_stopped_loop` then answers False, so the stop removes the loop's row like any other legacy loop's, and after the next enable the watchdog cannot tell that campaign worker's deliberate finish from an unreachable session. No security impact | fails toward the ordinary path; not a deletion blocker | none |
 
 **STAGE** (`builtin_adoption_apply.staging_pass`, kicked by
 `_kick_builtin_adoption_staging` after the listener serves) never mutates a record.

@@ -2,9 +2,10 @@
 
 An app backend that needs a host control with no ``ctx`` seam (a sensitive-path
 check, a no-follow read, outbound redaction, an audit row, a sandboxed child, a
-process or file-lock helper) otherwise looks up a private ``kiro_crew`` name by
-string. Those names move between releases, so each lookup is a gap that keeps a
-wheel copy alive. This package is the stable spelling of the most-used of them.
+process or file-lock helper, the public-address check for a URL it fetches) otherwise
+looks up a private ``kiro_crew`` name by string. Those names move between releases,
+so each lookup is a gap that keeps a wheel copy alive. This package is the stable
+spelling of the most-used of them.
 
 **Reachable from both backend kinds.** An in-process app (``backend.hooks``) and a
 spawned one (``backend.entryPoint`` on the gateway's interpreter, the default once
@@ -16,12 +17,14 @@ absent, exactly as it treats an older gateway.
 gateway itself enforces, looked up at call time, so a check tightened in a later
 release reaches the app with the wheel. Nothing here is a copy, and no name adds
 reach: a spawn is wrapped in the same OS sandbox and can only keep or tighten its
-tier, a read refuses exactly what the private read refuses.
+tier, a read refuses exactly what the private read refuses, and the URL check only
+refuses: it opens no connection.
 
 **Level-gated.** ``SDK_LEVEL`` is the App Kit seam level of this build
-(``ctx.sdk_level`` for an in-process app); the package exists from level 7. An app
-reads it through a feature-detected import and keeps its own refusal on an older
-gateway.
+(``ctx.sdk_level`` for an in-process app); the package exists from level 7. A name
+added after the package carries its own level in ``_EXPORT_LEVELS``. An app reads
+the package through a feature-detected import, and a later name with
+``getattr(sdk, name, None)``, and keeps its own refusal on an older gateway.
 
 Importing the package is cheap: each name is bound on first access, so a spawned
 backend that wants one helper does not load the gateway's whole security stack.
@@ -65,6 +68,12 @@ if TYPE_CHECKING:
         sandboxed_argv,
         sandboxed_argv_async,
     )
+    from kiro_crew.apps.backend_sdk.urls import (  # noqa: F401
+        UrlRejectedError,
+        VettedUrl,
+        address_is_not_public,
+        vet_public_url,
+    )
 
 #: The App Kit seam level this gateway provides; the package exists from level 7.
 SDK_LEVEL: int = APP_SDK_LEVEL
@@ -97,6 +106,21 @@ _LAZY_EXPORTS: dict[str, str] = {
     "run_sandboxed_async": "spawn",
     "sandboxed_argv": "spawn",
     "sandboxed_argv_async": "spawn",
+    "UrlRejectedError": "urls",
+    "VettedUrl": "urls",
+    "address_is_not_public": "urls",
+    "vet_public_url": "urls",
+}
+
+#: Public name -> the App Kit seam level that publishes it, for each name added after
+#: ``BACKEND_SDK_LEVEL``. A name absent here is published at ``BACKEND_SDK_LEVEL``.
+#: The adoption pin tool (``scripts/adoption_pin.py``) counts a tree's use of a name
+#: at this level, so a host older than the name keeps the wheel copy.
+_EXPORT_LEVELS: dict[str, int] = {
+    "UrlRejectedError": 14,
+    "VettedUrl": 14,
+    "address_is_not_public": 14,
+    "vet_public_url": 14,
 }
 
 __all__ = sorted({"SDK_LEVEL", "BACKEND_SDK_LEVEL", *_LAZY_EXPORTS})

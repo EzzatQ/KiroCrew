@@ -7834,8 +7834,10 @@ on an installed app's `credentialMasks` (§37), `permissions.chatLaunch` and
 `useBrowserView` and `useBrowserCoords` (RFC app-sdk-browser, step 1c) and the SDK's
 `appWebOriginStatus` (§18k); level 12 adds `permissions.kiroOperations`, its route and
 `ctx.kiro_call` (§47), and the SDK's `SessionChanges` and `DiffView` (§18l); level 13 adds
-`/api/apps/<name>/browser-sites` and the SDK's `useBrowserSites` (§45). Several seams share level 7,
-three share level 8, and the open batch that level 10 starts shares level 10, so an app that needs one
+`/api/apps/<name>/browser-sites` and the SDK's `useBrowserSites` (§45); level 14 adds the backend
+SDK's `vet_public_url`, `UrlRejectedError`, `VettedUrl` and `address_is_not_public` (§40). Several seams share level 7,
+three share level 8, the open batch that level 10 starts shares level 10, and the batch of backend
+SDK names that level 14 opens shares level 14, so an app that needs one
 feature-detects it (the manifest key or attribute, or the SDK export), never the level alone. An app reads `ctx.sdk_level` or the SDK export to detect an
 older host and degrade, instead of failing on a missing attribute.
 
@@ -8400,7 +8402,11 @@ shortcut's `platformAccelerators` and `contributes.memoryProviders` (level 8),
 `getattr`/`hasattr` of that name on any receiver, and the backend SDK package in
 any form in such a file (level 7): the file names both `kiro_crew` and the word
 `backend_sdk`, which catches a dotted import, `from kiro_crew.apps import
-backend_sdk`, an attribute of an imported parent and a string lookup alike. A level below the highest one found
+backend_sdk`, an attribute of an imported parent and a string lookup alike. Once
+one such file names the package, a backend SDK name published above level 7
+(`backend_sdk._EXPORT_LEVELS`, §40) counts at its own level when it appears in any
+such file, because a tree imports the package in one file and calls its names in
+another. A level below the highest one found
 is refused, naming what was found, by `compute` and `verify` alike, so a tree that
 feature-detects a seam and degrades still pins at that seam's level, and a host
 without it keeps the wheel copy. The scan errs wide: a false hit only asks for a
@@ -9906,11 +9912,14 @@ that wants one helper does not pay for the security stack.
 | Audit | `audit_log(app_name=None)` | `apps.audit_sdk.AuditSDK` (the `ctx.audit` writer) |
 | Sandboxed children | `run_sandboxed`, `run_sandboxed_async`, `sandboxed_argv`, `sandboxed_argv_async`, `SandboxUnavailableError` | `sandbox.sandboxed_spawn_argv` then `sandbox.run_limited`; `sandbox.sandboxed_spawn_argv_async` then `sandbox.create_subprocess_limited`; the two preparations alone; `sandbox.SandboxUnavailableError` |
 | Process and locks | `IS_WINDOWS`, `IS_MACOS`, `IS_LINUX`, `IS_POSIX`, `kill_and_reap`, `is_link_or_junction`, `first_linked_ancestor`, `rmtree_force`, `file_lock` | the `platform_compat` names of the same spelling |
+| Outbound URLs (level 14) | `vet_public_url(url)`, `UrlRejectedError`, `VettedUrl`, `address_is_not_public(address)` | `link_unfurl.vet_unfurl_url`, `link_unfurl.UnfurlRejected`, `link_unfurl.VettedUrl`, `link_unfurl.address_is_not_public` |
 
 **Same safety semantics.** A read refuses exactly what the private read refuses and
 raises the gateway's own `FileTooLargeError`; a spawn the host cannot sandbox raises
-the gateway's own `SandboxUnavailableError`. The exception classes are the private
-ones, not look-alikes, so an `except` written against either catches both.
+the gateway's own `SandboxUnavailableError`; a refused URL raises the gateway's own
+`UnfurlRejected` (as `UrlRejectedError`) with the same `invalid_url` or `blocked_url`
+code, and the result is the gateway's own `VettedUrl`. The exception classes are the
+private ones, not look-alikes, so an `except` written against either catches both.
 
 **No widening knob.** A public signature carries only the parameters the apps use, and
 never one that adds reach. `sandboxed_argv` accepts the `standard` and `strict` tiers
@@ -9918,7 +9927,17 @@ and refuses any other value (`off` included) with `ValueError` before anything i
 prepared; the private chokepoint's `extra_*_dirs`, `first_party_fixed_argv` and
 `is_kiro_cli` lift a mask, open a write window in a sealed parent or reclassify the
 child, which is the gateway's decision for its own spawns, so they are not offered.
-The read has no `admit_hardlinked` or `canonical_gate`. The SDK spawns nothing that
+The read has no `admit_hardlinked` or `canonical_gate`. The URL check has no
+`resolve`, `allow_any_port` or `allow_private`: the first lets the caller choose the
+answers that are checked, the second lifts the 80/443 port rule and the third narrows
+the address rule to link-local and metadata addresses, each the gateway's choice for
+its own probes, so `vet_public_url` takes the URL alone and always applies the full
+public-address rule. It opens no connection and pins nothing, so the caller dials
+only `VettedUrl.addresses`, through a resolver keyed on `VettedUrl.wire_host`; a
+second resolution at connect time would dial an address the check never saw. It
+blocks on one `getaddrinfo`, so an in-process app calls it from a worker thread.
+`address_is_not_public` keeps the private polarity (`True` means refuse) and answers
+`True` for a value that is not an IP literal. The SDK spawns nothing that
 is not sandboxed: `run_sandboxed` and `run_sandboxed_async` prepare through the
 chokepoint and run under the resource limits in the same function, with the
 scrubbed environment and the cleanup path removed on every outcome, so
@@ -9940,7 +9959,8 @@ outlives it; its docstring and the api-reference row point such a child at the
 async form. The private limited spawners, which run whatever argv they are
 handed, are not offered. Nothing here is gated by a
 permission because nothing adds reach: the controls only refuse, redact, record or
-confine, and an in-process app could call the private names anyway.
+confine (the URL check's one `getaddrinfo` is a lookup any backend can make), and an
+in-process app could call the private names anyway.
 
 **Audit attribution.** `audit_log()` returns the `ctx.audit` writer for the name in
 `KIROCREW_APP_NAME`, which the gateway sets on every spawned backend, or for an
@@ -9951,13 +9971,19 @@ cross-process under its chain lock (`sel_chain_lock`), so a spawned backend's ro
 the gateway's own interleave safely.
 
 **Level.** `SDK_LEVEL` is `APP_SDK_LEVEL`; `BACKEND_SDK_LEVEL` is 7, the level that
-publishes the package. The adoption pin tool counts any non-test source naming the
-package as a level-7 use (§33), so a tree that adopts it is held on a host without it.
+publishes the package. A name added later carries its own level in `_EXPORT_LEVELS`
+(public name to level); a name absent there is published at 7. The outbound URL names
+are level 14, which the batch of backend SDK names that level opens shares, so an app
+feature-detects each one by name (`getattr(sdk, "vet_public_url", None)`), never by
+the level alone. The adoption pin tool counts any non-test source naming the package
+as a level-7 use, and, once one does, each `_EXPORT_LEVELS` name any non-test source
+mentions at that name's level (§33), so a tree that adopts a name is held on a host
+without it and the wheel copy keeps serving there.
 
 **Not in it yet.** The names the apps reach that this package does not cover stay
 private and keep their `_host.py` gap: chat slot and auto-nudge internals (they belong
 to the app-owned chat slot seam of ruling item 4), `pinned_fs` descriptor helpers,
-`link_unfurl` URL vetting, `messaging.raster.sniff_raster_mime`,
+`link_unfurl.pinned_connector` and `PinnedResolver`, `messaging.raster.sniff_raster_mime`,
 `asset_downloader.download_to`, `executors.subprocess_executor`,
 `apps.registry.minimal_env`, `config.loader.config_dir` and `KiroCrewConfig`,
 `security.redact_local_paths`, `security.iter_credential_matches`,
@@ -9969,9 +9995,10 @@ to the app-owned chat slot seam of ruling item 4), `pinned_fs` descriptor helper
 Writers: `apps/backend_sdk/__init__.py`, `apps/backend_sdk/paths.py`,
 `apps/backend_sdk/files.py`, `apps/backend_sdk/redaction.py`,
 `apps/backend_sdk/audit.py`, `apps/backend_sdk/spawn.py`,
-`apps/backend_sdk/process.py`, `apps/app_sdk_level.py`,
+`apps/backend_sdk/process.py`, `apps/backend_sdk/urls.py`, `apps/app_sdk_level.py`,
 `website/src/app-sdk/sdkLevel.ts`, `scripts/adoption_pin.py` (`_seam_level_uses`).
-Pinned by `test/test_app_backend_sdk.py` and `test/test_builtin_adoption_pins.py`.
+Pinned by `test/test_app_backend_sdk.py`, `test/test_app_backend_sdk_urls.py` and
+`test/test_builtin_adoption_pins.py`.
 App authors: `docs/app-kit/api-reference.md` § Backend SDK.
 
 ## 41. App-owned chat slots (seam level 7)

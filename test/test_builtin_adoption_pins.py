@@ -652,6 +652,42 @@ def test_the_pin_tool_checks_out_without_the_operators_git_config(tmp_path, monk
         ),
         ({}, {"backend/_host.py": "import kiro_crew\nfrom . import my_backend_sdk\n"}, {}),
         ({}, {"tests/fakehost.py": "import kiro_crew.apps.backend_sdk\n"}, {}),
+        (
+            {},
+            {"backend/_host.py": "from kiro_crew.apps.backend_sdk import vet_public_url\n"},
+            {"kiro_crew.apps.backend_sdk": 7, "kiro_crew.apps.backend_sdk.vet_public_url": 14},
+        ),
+        (
+            {},
+            {
+                "backend/_host.py": "sdk = _host_module('kiro_crew.apps.backend_sdk')\n",
+                "backend/providers/feed.py": (
+                    "def f(sdk):\n    return sdk.address_is_not_public('x')\n"
+                ),
+            },
+            {
+                "kiro_crew.apps.backend_sdk": 7,
+                "kiro_crew.apps.backend_sdk.address_is_not_public": 14,
+            },
+        ),
+        (
+            {},
+            {"backend/routes.py": "def f(a):\n    return link_unfurl.address_is_not_public(a)\n"},
+            {},
+        ),
+        (
+            {},
+            {"tests/fakehost.py": "import kiro_crew.apps.backend_sdk\nvet_public_url = None\n"},
+            {},
+        ),
+        (
+            {},
+            {
+                "backend/_host.py": "sdk = _host_module('kiro_crew.apps.backend_sdk')\n",
+                "tests/fakehost.py": "vet_public_url = None\n",
+            },
+            {"kiro_crew.apps.backend_sdk": 7},
+        ),
         ({}, {"backend/manifest.py": "def f(manifest):\n    return manifest.lifecycle\n"}, {}),
         ({}, {"tests/fakehost.py": "ctx.turns = None\n"}, {}),
         ({}, {"backend/test_seams.py": "ctx.turns = None\n"}, {}),
@@ -678,6 +714,18 @@ def test_the_pin_tool_never_lets_a_level_fall_below_what_the_tree_uses(monkeypat
         assert "app.json credentialMasks" in refusal
     assert "ctx.turns" in tool._sdk_level_refusal(NAME, 1, uses)
     assert "ctx.turns" not in tool._sdk_level_refusal(NAME, 2, uses)
+
+
+def test_the_pin_tool_holds_a_later_backend_sdk_name_at_its_own_level(monkeypatch):
+    from kiro_crew.apps import backend_sdk
+
+    tool = _pin_tool(monkeypatch)
+    assert tool._BACKEND_SDK_LATER_NAMES == backend_sdk._EXPORT_LEVELS
+    uses = {"kiro_crew.apps.backend_sdk": 7, "kiro_crew.apps.backend_sdk.vet_public_url": 14}
+    refusal = tool._sdk_level_refusal(NAME, 7, uses)
+    assert refusal is not None and "--min-sdk-level 14" in refusal
+    assert "vet_public_url" in refusal
+    assert tool._sdk_level_refusal(NAME, 14, uses) is None
 
 
 def _measure_tree(monkeypatch, tmp_path, tool, files, level):

@@ -17,6 +17,10 @@ the person's Kiro sign-in, which never reaches the app; and the SDK's
 Level 13 adds ``/api/apps/<name>/browser-sites``: the app's browsing list with the
 sites the owner added, which the app and its backend read, and the owner's edits to
 it; and the SDK's ``useBrowserSites``, whose add asks the owner in the dashboard.
+Level 14 adds the backend SDK's ``vet_public_url``, ``UrlRejectedError``,
+``VettedUrl`` and ``address_is_not_public``: the gateway's outbound public-address
+check for a URL, or a resolved address, an app's backend fetches. The seams of the
+batch level 14 opens share it.
 """
 
-APP_SDK_LEVEL = 13
+APP_SDK_LEVEL = 14

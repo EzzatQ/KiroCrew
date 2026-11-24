@@ -720,6 +720,10 @@ if TYPE_CHECKING:  # names the owners import from elsewhere in kiro_crew, still 
     from kiro_crew.autonudge_judge import ending_phrase, screen_phrase  # noqa: F401
     from kiro_crew.config.loader import KiroCrewConfig  # noqa: F401
     from kiro_crew.mcp_tools._limits import _MONITOR_DEFAULT_MAX_CYCLES  # noqa: F401
+    from kiro_crew.monitoring.also_wake import (  # noqa: F401
+        ALSO_WAKE_KIND_REFUSAL,
+        ALSO_WAKE_KINDS,
+    )
     from kiro_crew.monitoring.limits import (  # noqa: F401
         DEFAULT_RUNTIME_CEILING_SECS,
         runtime_ceiling_secs,
@@ -731,6 +735,7 @@ if TYPE_CHECKING:  # names the owners import from elsewhere in kiro_crew, still 
         DEFAULT_MONITOR_RUNTIME_SECS,
         DEFAULT_MONITOR_TOKENS,
         MAX_MONITOR_AGENT_TURNS,
+        MAX_MONITOR_ALSO_WAKE_ON,
         MAX_MONITOR_CADENCE_SECS,
         MAX_MONITOR_CHECK_NAMES,
         MAX_MONITOR_PROVIDER_ERRORS,

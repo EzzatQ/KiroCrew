@@ -650,6 +650,42 @@ def test_the_pin_tool_checks_out_without_the_operators_git_config(tmp_path, monk
             {"backend/_host.py": "from kiro_crew import apps\nsdk = apps.backend_sdk\n"},
             {"kiro_crew.apps.backend_sdk": 7},
         ),
+        (
+            {},
+            {"backend/_host.py": "from kiro_crew.apps.backend_sdk import pin_parent\n"},
+            {"kiro_crew.apps.backend_sdk": 7, "kiro_crew.apps.backend_sdk.pin_parent": 14},
+        ),
+        (
+            {},
+            {
+                "backend/_host.py": "sdk = _host_module('kiro_crew.apps.backend_sdk')\n",
+                "backend/audio_import.py": "sdk.copy_file_pinned(src, dst)\n",
+            },
+            {
+                "kiro_crew.apps.backend_sdk": 7,
+                "kiro_crew.apps.backend_sdk.copy_file_pinned": 14,
+            },
+        ),
+        (
+            {},
+            {
+                "backend/_host.py": (
+                    "from kiro_crew.apps import backend_sdk as sdk\n"
+                    "real = getattr(sdk, 'fd_real_path', None)\n"
+                    "def my_pin_parent():\n    return None\n"
+                ),
+            },
+            {"kiro_crew.apps.backend_sdk": 7, "kiro_crew.apps.backend_sdk.fd_real_path": 14},
+        ),
+        ({}, {"backend/_host.py": "_host_attr('kiro_crew.pinned_fs', 'pin_parent')\n"}, {}),
+        (
+            {},
+            {
+                "backend/_host.py": "from kiro_crew.apps import backend_sdk\n",
+                "tests/fakehost.py": "backend_sdk.pin_parent\n",
+            },
+            {"kiro_crew.apps.backend_sdk": 7},
+        ),
         ({}, {"backend/_host.py": "import kiro_crew\nfrom . import my_backend_sdk\n"}, {}),
         ({}, {"tests/fakehost.py": "import kiro_crew.apps.backend_sdk\n"}, {}),
         ({}, {"backend/manifest.py": "def f(manifest):\n    return manifest.lifecycle\n"}, {}),

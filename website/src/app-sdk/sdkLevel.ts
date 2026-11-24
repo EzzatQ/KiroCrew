@@ -14,5 +14,7 @@
  * and `SessionChanges` and `DiffView`. Level 13 adds `useBrowserSites`: the app's
  * browsing list (declared sites and the ones the owner added), and the owner's edits
  * through `/api/apps/<name>/browser-sites`, where adding a site asks the owner first.
+ * Level 14 opens a batch of backend SDK names, among them the pinned path walk and
+ * copy (`pin_parent`, `copy_file_pinned`); the dashboard gains nothing at that level.
  */
-export const APP_SDK_LEVEL = 13
+export const APP_SDK_LEVEL = 14

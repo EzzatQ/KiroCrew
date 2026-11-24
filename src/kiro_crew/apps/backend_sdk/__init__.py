@@ -1,10 +1,11 @@
 """The public backend SDK: the host controls an app's own Python may call.
 
 An app backend that needs a host control with no ``ctx`` seam (a sensitive-path
-check, a no-follow read, outbound redaction, an audit row, a sandboxed child, a
-process or file-lock helper) otherwise looks up a private ``kiro_crew`` name by
-string. Those names move between releases, so each lookup is a gap that keeps a
-wheel copy alive. This package is the stable spelling of the most-used of them.
+check, a no-follow read, a descriptor-pinned path walk and copy, outbound
+redaction, an audit row, a sandboxed child, a process or file-lock helper) otherwise
+looks up a private ``kiro_crew`` name by string. Those names move between releases,
+so each lookup is a gap that keeps a wheel copy alive. This package is the stable
+spelling of the most-used of them.
 
 **Reachable from both backend kinds.** An in-process app (``backend.hooks``) and a
 spawned one (``backend.entryPoint`` on the gateway's interpreter, the default once
@@ -16,12 +17,13 @@ absent, exactly as it treats an older gateway.
 gateway itself enforces, looked up at call time, so a check tightened in a later
 release reaches the app with the wheel. Nothing here is a copy, and no name adds
 reach: a spawn is wrapped in the same OS sandbox and can only keep or tighten its
-tier, a read refuses exactly what the private read refuses.
+tier, a read or a pinned copy refuses exactly what the private one refuses.
 
 **Level-gated.** ``SDK_LEVEL`` is the App Kit seam level of this build
-(``ctx.sdk_level`` for an in-process app); the package exists from level 7. An app
-reads it through a feature-detected import and keeps its own refusal on an older
-gateway.
+(``ctx.sdk_level`` for an in-process app); the package exists from level 7. A name
+added after the package carries its own level in ``_EXPORT_LEVELS``. An app reads
+the package through a feature-detected import, and a later name with
+``getattr(sdk, name, None)``, and keeps its own refusal on an older gateway.
 
 Importing the package is cheap: each name is bound on first access, so a spawned
 backend that wants one helper does not load the gateway's whole security stack.
@@ -45,6 +47,14 @@ if TYPE_CHECKING:
     from kiro_crew.apps.backend_sdk.paths import (  # noqa: F401
         contains_sensitive_path,
         is_sensitive_path,
+    )
+    from kiro_crew.apps.backend_sdk.pinned import (  # noqa: F401
+        PinnedPathRefusal,
+        copy_file_pinned,
+        fd_real_path,
+        is_reparse_point,
+        pin_parent,
+        supports_pinned_walk,
     )
     from kiro_crew.apps.backend_sdk.process import (  # noqa: F401
         IS_LINUX,
@@ -81,6 +91,12 @@ _LAZY_EXPORTS: dict[str, str] = {
     "read_bytes_nofollow": "files",
     "contains_sensitive_path": "paths",
     "is_sensitive_path": "paths",
+    "PinnedPathRefusal": "pinned",
+    "copy_file_pinned": "pinned",
+    "fd_real_path": "pinned",
+    "is_reparse_point": "pinned",
+    "pin_parent": "pinned",
+    "supports_pinned_walk": "pinned",
     "IS_LINUX": "process",
     "IS_MACOS": "process",
     "IS_POSIX": "process",
@@ -97,6 +113,19 @@ _LAZY_EXPORTS: dict[str, str] = {
     "run_sandboxed_async": "spawn",
     "sandboxed_argv": "spawn",
     "sandboxed_argv_async": "spawn",
+}
+
+#: Public name -> the App Kit seam level that publishes it, for each name added after
+#: ``BACKEND_SDK_LEVEL``. A name absent here is published at ``BACKEND_SDK_LEVEL``.
+#: The adoption pin tool (``scripts/adoption_pin.py``) counts a tree's use of a name
+#: at this level, so a host older than the name keeps the wheel copy.
+_EXPORT_LEVELS: dict[str, int] = {
+    "PinnedPathRefusal": 14,
+    "copy_file_pinned": 14,
+    "fd_real_path": 14,
+    "is_reparse_point": 14,
+    "pin_parent": 14,
+    "supports_pinned_walk": 14,
 }
 
 __all__ = sorted({"SDK_LEVEL", "BACKEND_SDK_LEVEL", *_LAZY_EXPORTS})

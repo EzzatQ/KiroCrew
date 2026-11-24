@@ -17,6 +17,9 @@ the person's Kiro sign-in, which never reaches the app; and the SDK's
 Level 13 adds ``/api/apps/<name>/browser-sites``: the app's browsing list with the
 sites the owner added, which the app and its backend read, and the owner's edits to
 it; and the SDK's ``useBrowserSites``, whose add asks the owner in the dashboard.
+Level 14 adds the backend SDK's descriptor-pinned path helpers: ``supports_pinned_walk``,
+``is_reparse_point``, ``pin_parent``, ``copy_file_pinned``, ``fd_real_path`` and
+``PinnedPathRefusal``. The backend SDK names of the batch level 14 opens share it.
 """
 
-APP_SDK_LEVEL = 13
+APP_SDK_LEVEL = 14

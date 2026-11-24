@@ -17,6 +17,10 @@ the person's Kiro sign-in, which never reaches the app; and the SDK's
 Level 13 adds ``/api/apps/<name>/browser-sites``: the app's browsing list with the
 sites the owner added, which the app and its backend read, and the owner's edits to
 it; and the SDK's ``useBrowserSites``, whose add asks the owner in the dashboard.
+Level 14 adds ``permissions.browserRecipes``: fixed clicks on CSS selectors the gateway
+runs on the app's own agent's tab, through ``POST /api/browser/media`` (``action:
+"recipe"``, the SDK's ``useBrowserMedia().runRecipe``) and, for a ``watch`` recipe, by
+itself while the app's media plays.
 """
 
-APP_SDK_LEVEL = 13
+APP_SDK_LEVEL = 14

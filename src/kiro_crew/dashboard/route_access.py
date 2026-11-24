@@ -120,4 +120,9 @@ ROUTES: Final[dict[tuple[str, str], RouteAccess]] = {
     # and keeps the instance id (relay_client.lease.crew_instance_id), so the verb is
     # not ``read``; it changes nothing after that.
     ("GET", "/v1/crew/info"): RouteAccess("crew_api.info.resolve", PREVIEW),
+    # Owner dashboard only (handlers/project_mcp_approve.py); the mcp.project_server
+    # card's Apply. Records the approval and restarts open chats.
+    ("POST", "/api/mcp/project-servers/approve"): RouteAccess(
+        "mcp.project_servers.approve", UNSTABLE
+    ),
 }

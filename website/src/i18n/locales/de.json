@@ -11519,6 +11519,8 @@
       "title_crewmate_import": "Bot „{{name}}“ importieren",
       "primary_mcp_server": "Anwenden",
       "decline_mcp_server": "Abbrechen",
+      "decline_mcp_project_server": "Nicht jetzt",
+      "primary_mcp_project_server": "In diesem Ordner erlauben",
       "title_mcp_server_add": "Server hinzufügen: {{name}}",
       "title_mcp_server_change": "Server ändern: {{name}}",
       "title_mcp_server_remove": "Server entfernen: {{name}}",

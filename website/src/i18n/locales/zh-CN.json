@@ -11255,6 +11255,8 @@
       "title_crewmate_import": "导入 Bot“{{name}}”",
       "primary_mcp_server": "应用",
       "decline_mcp_server": "取消",
+      "decline_mcp_project_server": "暂不",
+      "primary_mcp_project_server": "在此文件夹中允许",
       "title_mcp_server_add": "添加服务器：{{name}}",
       "title_mcp_server_change": "更改服务器：{{name}}",
       "title_mcp_server_remove": "移除服务器：{{name}}",

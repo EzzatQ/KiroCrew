@@ -11519,6 +11519,8 @@
       "title_crewmate_import": "Bot “{{name}}” आयात करो",
       "primary_mcp_server": "लागू करो",
       "decline_mcp_server": "रद्द करो",
+      "decline_mcp_project_server": "अभी नहीं",
+      "primary_mcp_project_server": "इस फ़ोल्डर में अनुमति दो",
       "title_mcp_server_add": "सर्वर जोड़ो: {{name}}",
       "title_mcp_server_change": "सर्वर बदलो: {{name}}",
       "title_mcp_server_remove": "सर्वर हटाओ: {{name}}",

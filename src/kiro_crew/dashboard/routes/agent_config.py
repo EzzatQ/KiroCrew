@@ -28,6 +28,7 @@ from kiro_crew.dashboard.handlers.mcp_discover import (
     api_mcp_discover_detail,
     api_mcp_discover_install,
 )
+from kiro_crew.dashboard.handlers.project_mcp_approve import api_mcp_project_server_approve
 
 
 def register(app: web.Application) -> None:
@@ -88,6 +89,8 @@ def register(app: web.Application) -> None:
     app.router.add_post("/api/mcp/custom", api_mcp_custom_add)
     app.router.add_get("/api/mcp/custom/{name}", api_mcp_custom_get)
     app.router.add_put("/api/mcp/custom/{name}", api_mcp_custom_update)
+    # The mcp.project_server card's Apply: approve one server of a folder's MCP file.
+    app.router.add_post("/api/mcp/project-servers/approve", api_mcp_project_server_approve)
     app.router.add_post("/api/mcp/probe", handlers.api_mcp_probe)
     app.router.add_get("/api/mcp/probe", handlers.api_mcp_probe_cached)
     app.router.add_post("/api/mcp/probe/{name}", handlers.api_mcp_probe_one)

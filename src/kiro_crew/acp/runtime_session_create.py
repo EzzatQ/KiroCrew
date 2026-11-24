@@ -17,7 +17,8 @@ Instance fields written: ``_entitlement_probe_attempt_at``, ``_entitlement_probe
 
 Instance fields read: ``_agent``, ``_agent_capabilities``, ``_agent_version``,
 ``_crew_agent``, ``_dead``, ``_entitlement_probe_lock``, ``_expect_mcp_reports``,
-``_fold_mcp_frame``, ``_host_sends_mcp_init``, ``_initialized``, ``_kas_telemetry_sent``,
+``_fold_mcp_frame``, ``_hold_project_servers``, ``_host_sends_mcp_init``, ``_initialized``,
+``_kas_telemetry_sent``,
 ``_mcp_gateway_overlay``, ``_mcp_reports``, ``_member_context``, ``_model``, ``_open_mcp_report``,
 ``_pending_init_notifications``,
 ``_pid``, ``_pool_lookup``, ``_process``, ``_record_tree_in_background``,
@@ -541,6 +542,10 @@ async def create_session(
     launch_snapshots = kas_env_launch.batch_snapshot_names(kas_agents) + crew_bridged
     # A worker stub whose server the payload's later read of the spec muted.
     mcp_servers = _drop_withdrawn_stubs(mcp_servers, kas_extras.withdrawn_stub_names)
+    # Before the exclusion prune, so a held name KAS does not load anyway is dropped.
+    mcp_servers = await self._hold_project_servers(
+        mcp_servers, active_agent, session_work_dir, kas_agents
+    )
     mcp_servers = without_excluded_stubs(mcp_servers, kas_agents)
     kas_agents, mcp_servers = hoist_servers_for_session(
         kas_agents,

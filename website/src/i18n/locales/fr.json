@@ -11783,6 +11783,8 @@
       "title_crewmate_import": "Importer le Bot « {{name}} »",
       "primary_mcp_server": "Appliquer",
       "decline_mcp_server": "Annuler",
+      "decline_mcp_project_server": "Pas maintenant",
+      "primary_mcp_project_server": "Autoriser dans ce dossier",
       "title_mcp_server_add": "Ajouter le serveur : {{name}}",
       "title_mcp_server_change": "Modifier le serveur : {{name}}",
       "title_mcp_server_remove": "Supprimer le serveur : {{name}}",

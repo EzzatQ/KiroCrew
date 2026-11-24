@@ -11255,6 +11255,8 @@
       "title_crewmate_import": "Bot ‘{{name}}’ 가져오기",
       "primary_mcp_server": "적용",
       "decline_mcp_server": "취소",
+      "decline_mcp_project_server": "나중에",
+      "primary_mcp_project_server": "이 폴더에서 허용",
       "title_mcp_server_add": "서버 추가: {{name}}",
       "title_mcp_server_change": "서버 변경: {{name}}",
       "title_mcp_server_remove": "서버 제거: {{name}}",

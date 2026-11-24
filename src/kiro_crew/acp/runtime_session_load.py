@@ -12,7 +12,8 @@ Instance fields written: ``_load_replay_frames``, ``_parked_copies``, ``_session
 
 Instance fields read: ``_acp_backend``, ``_agent``, ``_agent_capabilities``,
 ``_agent_version``, ``_can_load_session``, ``_crew_agent``, ``_expect_mcp_reports``,
-``_fold_mcp_frame``, ``_host_sends_mcp_init``, ``_initialized``, ``_kas_host_auth``,
+``_fold_mcp_frame``, ``_hold_project_servers``, ``_host_sends_mcp_init``, ``_initialized``,
+``_kas_host_auth``,
 ``_kas_served_token_digest``, ``_kas_telemetry_sent``, ``_mcp_gateway_overlay``,
 ``_mcp_switched_off``, ``_model``, ``_open_mcp_report``, ``_park_in_start_agent``, ``_pid``,
 ``_pool_lookup``, ``_record_keeping_sessions``, ``_record_tree_in_background``,
@@ -415,6 +416,9 @@ async def load_session(
     # a conversation that already had them.
     # Bound once, for the same consumers as session/new: see the note there.
     await self._write_remote_token()
+    # The project servers the person has not approved, as session/new holds them.
+    if self.acp_backend == ACP_BACKEND_KIRO:
+        mcp_servers = await self._hold_project_servers(mcp_servers, active_agent, session_work_dir)
     # The same prune session/new gets (``mcp_prune``), for the same hosts.
     pruned = None
     if self.acp_backend in ACP_BACKENDS_PRUNE_UNSTARTABLE_MCP:
@@ -504,6 +508,9 @@ async def load_session(
         launch_snapshots = kas_env_launch.batch_snapshot_names(kas_agents)
         # Same as create_session: a worker stub the payload's spec read muted.
         mcp_servers = _drop_withdrawn_stubs(mcp_servers, kas_extras.withdrawn_stub_names)
+        mcp_servers = await self._hold_project_servers(
+            mcp_servers, active_agent, session_work_dir, kas_agents
+        )
         mcp_servers = without_excluded_stubs(mcp_servers, kas_agents)
         kas_agents, mcp_servers = hoist_servers_for_session(
             kas_agents,

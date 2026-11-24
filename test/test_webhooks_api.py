@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiohttp.test_utils import make_mocked_request
+from real_session_manager import real_sessions
 from webhooks_api_helpers import wired_fixture  # noqa: F401
 from webhooks_api_helpers import _bearer, _payload, _req
 
@@ -321,6 +322,71 @@ class TestOneTurnPerSessionKey:
         )
 
         assert session_key not in H._hook_inflight_sessions, "crashed turn wedged the key"
+
+
+class TestAReusedSessionKeyStartsFresh:
+    """A hook session is one-shot: the next call on its ``sessionKey`` has nothing to resume."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("crashed", [False, True])
+    async def test_the_turn_leaves_no_resume_sid_for_its_key(self, wired, monkeypatch, crashed):
+        monkeypatch.setattr(
+            H,
+            "_run_hook_inner",
+            AsyncMock(side_effect=RuntimeError("boom") if crashed else None, return_value="done"),
+        )
+        state = _state_with_a_mapped_hook_key()
+
+        await _run_turn(state)
+
+        assert state.sessions.resumable_sid(_KEY) is None, "next call would resume"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "owed",
+        [
+            "has_live_or_queued_children",
+            "has_in_memory_pending_work_for",
+            "has_unfinished_report_for",
+        ],
+    )
+    async def test_a_sub_agent_still_owing_a_report_keeps_the_conversation(
+        self, wired, monkeypatch, owed
+    ):
+        """The report is injected into this conversation, so its resume sid stays."""
+        monkeypatch.setattr(H, "_run_hook_inner", AsyncMock(return_value="done"))
+        state = _state_with_a_mapped_hook_key()
+        state.subagents = MagicMock(
+            has_live_or_queued_children=MagicMock(return_value=False),
+            has_in_memory_pending_work_for=MagicMock(return_value=False),
+            has_unfinished_report_for=MagicMock(return_value=False),
+        )
+        getattr(state.subagents, owed).return_value = True
+
+        await _run_turn(state)
+
+        assert state.sessions.resumable_sid(_KEY) == "sid-first-call"
+
+
+_KEY = f"{H._HOOK_SESSION_PREFIX}review:pr-123"
+
+
+def _state_with_a_mapped_hook_key():
+    state = MagicMock(memory_startup_task=None, subagents=None)
+    state.sessions = real_sessions()
+    state.owner_id = None
+    state.slack_client = None
+    state.notify = MagicMock()
+    # What the turn's session start leaves in the map.
+    state.sessions.seed_conversation(_KEY, "sid-first-call", provider="claude_code")
+    assert state.sessions.resumable_sid(_KEY) == "sid-first-call"
+    return state
+
+
+async def _run_turn(state) -> None:
+    H._hook_inflight_sessions.add(_KEY)
+    await H._hook_semaphore.acquire()
+    await H._run_hook_agent(state, _KEY, "hi", "Bot", None, False, 30)
 
 
 class TestDeliveryIsRecordedAfterItHappens:

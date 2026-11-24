@@ -102,8 +102,11 @@ FORBIDDEN_BEFORE_THE_LIST = (
 #: Raised by 1 for all four: the credential redactor reads Unicode's default-ignorable
 #: table from the leaf ``kiro_crew.default_ignorable`` (moved there from the artifact
 #: store's tag rules, so both share one pinned table); that one file is the whole rise.
+#: Raised by 1 for ``mcp-core`` (498 to 499): the App Store search's declaration lives in
+#: its own ``kiro_crew.mcp_tools.catalog.app_store``, which the core listing loads from
+#: ``mcp_tools.DOMAIN_MODULES`` like every other domain.
 PACKAGE_MODULE_CEILING = {
-    "mcp-core": 498,
+    "mcp-core": 499,
     "mcp-cron": 365,
     "mcp-guide": 359,
     "mcp-mate": 361,

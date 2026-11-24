@@ -107,11 +107,15 @@ FORBIDDEN_BEFORE_THE_LIST = (
 #: (``kiro_crew.managed_env`` and ``.provider``: 2 modules for ``mcp-core`` and ``mcp-mate``,
 #: 1 for the other two, which have no more room). The lane's client, engine and settings load only
 #: when it is used.
+#: Raised by 1 for each server: the line-cap split of ``security.argv_floor_git_tar`` moved
+#: the git grammar it reads a git argv with into the owner ``security.argv_floor_git_grammar``,
+#: which the facade imports with the rest of its owners; the module count rose by that one
+#: file and nothing new loads.
 PACKAGE_MODULE_CEILING = {
-    "mcp-core": 500,
-    "mcp-cron": 367,
-    "mcp-guide": 361,
-    "mcp-mate": 363,
+    "mcp-core": 501,
+    "mcp-cron": 368,
+    "mcp-guide": 362,
+    "mcp-mate": 364,
 }
 
 #: The modules that read the two live values in the spawn tools' descriptions. They are

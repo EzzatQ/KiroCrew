@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import { api } from '../../../api/client'
 import { ALL_UNAVAILABLE } from '../../../api/sharedCrewUi'
 import type { CrewModeResponse } from '../../../api/sharedCrewMode'
-import { MessageByline, SpeakerHeading, useUserRowSpeaker } from './MessageByline'
+import { MessageByline, OtherSenderBubble, SpeakerHeading, useUserRowSpeaker } from './MessageByline'
 
 vi.mock('../../../api/client', () => ({ api: { sharedCrewViewer: vi.fn(), sharedCrewCapabilities: vi.fn(), sharedCrewMode: vi.fn(), sharedCrewPeople: vi.fn(), listApps: vi.fn(async () => []) } }))
 const viewer = vi.mocked(api.sharedCrewViewer)
@@ -25,6 +25,11 @@ function mount(node: ReactNode, slots: Array<Record<string, unknown>> | null) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return render(slots ? <Provider store={storeWith(slots) as any}>{tree}</Provider> : tree)
 }
+
+/** The byline reads capabilities first; only then are the mode and People
+ *  queries enabled, and the viewer read sits beside them. Waits that span
+ *  that chain get this ceiling instead of the 1000ms default. */
+const CHAIN_TIMEOUT_MS = 5000
 
 const bylines = () => screen.queryAllByTestId('message-byline').map(el => el.textContent)
 
@@ -47,7 +52,7 @@ beforeEach(() => {
 describe('MessageByline', () => {
   it('names the session creator to a viewer who did not create the session', async () => {
     mount(<><MessageByline meta={authored('p_ann', 'Ann')} slotKey="s1" /><MessageByline meta={authored('p_cy', 'Cy')} slotKey="s1" /></>, [SLOT])
-    await waitFor(() => expect(bylines()).toEqual(['Ann', 'Cy']))
+    await waitFor(() => expect(bylines()).toEqual(['Ann', 'Cy']), { timeout: CHAIN_TIMEOUT_MS })
   })
 
   it('shows no label on the viewer\'s own message', async () => {
@@ -55,42 +60,124 @@ describe('MessageByline', () => {
     // renders only once the mode and viewer are known, so the viewer's missing
     // label is then a decision, not a not-yet-loaded state.
     mount(<><MessageByline meta={authored('p_bob', 'Bob')} slotKey="s1" /><MessageByline meta={authored('p_cy', 'Cy')} slotKey="s1" /></>, [SLOT])
-    await waitFor(() => expect(viewer).toHaveBeenCalled())
-    await screen.findByTestId('message-byline')
+    await waitFor(() => expect(viewer).toHaveBeenCalled(), { timeout: CHAIN_TIMEOUT_MS })
+    await screen.findByTestId('message-byline', {}, { timeout: CHAIN_TIMEOUT_MS })
     expect(bylines()).toEqual(['Cy'])
   })
 
   it('the creator reading their own session sees only the others named', async () => {
     viewer.mockResolvedValue(person('p_ann', 'Ann'))
     mount(<><MessageByline meta={authored('p_ann', 'Ann')} slotKey="s1" /><MessageByline meta={authored('p_bob', 'Bob')} slotKey="s1" /></>, [SLOT])
-    await waitFor(() => expect(viewer).toHaveBeenCalled())
-    await screen.findByTestId('message-byline')
+    await waitFor(() => expect(viewer).toHaveBeenCalled(), { timeout: CHAIN_TIMEOUT_MS })
+    await screen.findByTestId('message-byline', {}, { timeout: CHAIN_TIMEOUT_MS })
     expect(bylines()).toEqual(['Bob'])
   })
 
-  it('stands the creator in for the viewer until the viewer read lands', async () => {
+  it('names everyone, the session creator included, until the viewer read lands', async () => {
+    // A teammate opening the creator's session: the creator's messages must not
+    // be drawn as the teammate's own while nobody said who the teammate is.
     viewer.mockReturnValue(new Promise(() => {}))
     mount(<><MessageByline meta={authored('p_ann', 'Ann')} slotKey="s1" /><MessageByline meta={authored('p_cy', 'Cy')} slotKey="s1" /></>, [SLOT])
-    await screen.findByTestId('message-byline')
-    expect(bylines()).toEqual(['Cy'])
+    await waitFor(() => expect(bylines()).toEqual(['Ann', 'Cy']), { timeout: CHAIN_TIMEOUT_MS })
+  })
+
+  it.each([
+    ['fails', () => viewer.mockRejectedValue(new Error('offline'))],
+    ['reports nobody', () => viewer.mockResolvedValue(null)],
+    ['reports an Unknown principal', () => viewer.mockResolvedValue(person('unknown', '', 'unknown'))],
+  ])('names everyone when the viewer read %s', async (_case, arrange) => {
+    arrange()
+    mount(<><MessageByline meta={authored('p_ann', 'Ann')} slotKey="s1" /><MessageByline meta={authored('p_bob', 'Bob')} slotKey="s1" /></>, [SLOT])
+    await waitFor(() => expect(bylines()).toEqual(['Ann', 'Bob']), { timeout: CHAIN_TIMEOUT_MS })
+  })
+
+  it('draws a stamped message as someone else\'s until the viewer is known, then the viewer\'s own as own', async () => {
+    let land: (p: ReturnType<typeof person>) => void = () => {}
+    viewer.mockReturnValue(new Promise(resolve => { land = resolve }))
+    const tone = (id: string) => screen.getByTestId('tone-' + id).textContent
+    mount(<>
+      <OtherSenderBubble meta={authored('p_ann', 'Ann')} slotKey="s1">{other => <span data-testid="tone-ann">{other ? 'other' : 'own'}</span>}</OtherSenderBubble>
+      <OtherSenderBubble meta={authored('p_bob', 'Bob')} slotKey="s1">{other => <span data-testid="tone-bob">{other ? 'other' : 'own'}</span>}</OtherSenderBubble>
+    </>, [SLOT])
+    await waitFor(() => expect(tone('ann')).toBe('other'), { timeout: CHAIN_TIMEOUT_MS })
+    expect(tone('bob')).toBe('other')
+    land(person('p_bob', 'Bob'))
+    await waitFor(() => expect(tone('bob')).toBe('own'), { timeout: CHAIN_TIMEOUT_MS })
+    expect(tone('ann')).toBe('other')
+  })
+
+  it('a personal Crew draws every message as own, whoever the viewer read names', async () => {
+    vi.mocked(api.sharedCrewCapabilities).mockResolvedValue(ALL_UNAVAILABLE)
+    viewer.mockReturnValue(new Promise(() => {}))
+    mount(<OtherSenderBubble meta={authored('p_ann', 'Ann')} slotKey="s1">{other => <span data-testid="tone">{other ? 'other' : 'own'}</span>}</OtherSenderBubble>, [SLOT])
+    await waitFor(() => expect(screen.getByTestId('tone').textContent).toBe('own'), { timeout: CHAIN_TIMEOUT_MS })
+    expect(bylines()).toEqual([])
+  })
+
+  it.each([
+    ['capabilities', () => vi.mocked(api.sharedCrewCapabilities).mockReturnValue(new Promise(() => {}))],
+    ['the mode', () => vi.mocked(api.sharedCrewMode).mockReturnValue(new Promise(() => {}))],
+    ['people', () => vi.mocked(api.sharedCrewPeople).mockReturnValue(new Promise(() => {}))],
+    ['a failed mode read', () => vi.mocked(api.sharedCrewMode).mockRejectedValue(new Error('offline'))],
+  ])('while attribution rests on %s not loaded, only the known viewer\'s message is drawn as own', async (_case, arrange) => {
+    arrange()
+    const tone = (id: string) => screen.getByTestId('tone-' + id).textContent
+    mount(<>
+      <OtherSenderBubble meta={authored('p_ann', 'Ann')}>{other => <span data-testid="tone-ann">{other ? 'other' : 'own'}</span>}</OtherSenderBubble>
+      <OtherSenderBubble meta={authored('p_bob', 'Bob')}>{other => <span data-testid="tone-bob">{other ? 'other' : 'own'}</span>}</OtherSenderBubble>
+    </>, null)
+    // Before any read answers nothing is drawn apart (a personal Crew's
+    // operator must not see their own sends as someone else's).
+    expect(tone('ann')).toBe('own')
+    expect(tone('bob')).toBe('own')
+    await waitFor(() => expect(tone('ann')).toBe('other'), { timeout: CHAIN_TIMEOUT_MS })
+    expect(tone('bob')).toBe('own')
+  })
+
+  it.each([
+    ['pending', () => {
+      vi.mocked(api.sharedCrewCapabilities).mockReturnValue(new Promise(() => {}))
+      viewer.mockReturnValue(new Promise(() => {}))
+    }],
+    ['failed', () => {
+      vi.mocked(api.sharedCrewCapabilities).mockRejectedValue(new Error('offline'))
+      viewer.mockRejectedValue(new Error('offline'))
+    }],
+  ])('with the attribution and viewer reads both %s, every stamped message stays own and nobody is named', async (_case, arrange) => {
+    // The single-operator transcript: a personal Crew stamps its operator's
+    // sends, and they are not drawn as someone else's on a cold load or after
+    // both reads fail.
+    arrange()
+    mount(<>
+      <MessageByline meta={authored('p_ann', 'Ann')} />
+      <OtherSenderBubble meta={authored('p_ann', 'Ann')}>{other => <span data-testid="tone-ann">{other ? 'other' : 'own'}</span>}</OtherSenderBubble>
+      <OtherSenderBubble meta={authored('p_bob', 'Bob')}>{other => <span data-testid="tone-bob">{other ? 'other' : 'own'}</span>}</OtherSenderBubble>
+    </>, null)
+    expect(screen.getByTestId('tone-ann').textContent).toBe('own')
+    await waitFor(() => expect(viewer).toHaveBeenCalled(), { timeout: CHAIN_TIMEOUT_MS })
+    await waitFor(() => expect(api.sharedCrewCapabilities).toHaveBeenCalled(), { timeout: CHAIN_TIMEOUT_MS })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(screen.getByTestId('tone-ann').textContent).toBe('own')
+    expect(screen.getByTestId('tone-bob').textContent).toBe('own')
+    expect(bylines()).toEqual([])
   })
 
   it('labels an author with no recorded person as Unattributed', async () => {
     mount(<MessageByline meta={authored('unknown', '', 'unknown')} slotKey="s1" />, [SLOT])
-    expect((await screen.findByTestId('message-byline')).textContent).toBe('Unattributed')
+    expect((await screen.findByTestId('message-byline', {}, { timeout: CHAIN_TIMEOUT_MS })).textContent).toBe('Unattributed')
   })
 
   it('leaves the viewer\'s own message unlabelled in a session with no recorded creator', async () => {
     // Cy's byline needs the viewer to be known, so once it renders the viewer's
     // own message has been judged against the known viewer.
     mount(<><MessageByline meta={authored('p_bob', 'Bob')} slotKey="s2" /><MessageByline meta={authored('p_cy', 'Cy')} slotKey="s2" /></>, [{ key: 's2', attribution: null }])
-    expect((await screen.findByTestId('message-byline')).textContent).toBe('Cy')
+    expect((await screen.findByTestId('message-byline', {}, { timeout: CHAIN_TIMEOUT_MS })).textContent).toBe('Cy')
     expect(bylines()).toEqual(['Cy'])
   })
 
   it('renders without a store and renders nothing for an unstamped message', async () => {
     mount(<MessageByline meta={authored('p_cy', 'Cy')} />, null)
-    expect((await screen.findByTestId('message-byline')).textContent).toBe('Cy')
+    expect((await screen.findByTestId('message-byline', {}, { timeout: CHAIN_TIMEOUT_MS })).textContent).toBe('Cy')
     const { container } = mount(<MessageByline meta={{}} />, null)
     expect(container.innerHTML).toBe('')
   })
@@ -101,7 +188,13 @@ describe('SpeakerHeading', () => {
 
   it('names a teammate and says You for the viewer, the same rule as the byline', async () => {
     mount(<><SpeakerHeading meta={authored('p_bob', 'Bob')} slotKey="s1" /><SpeakerHeading meta={authored('p_cy', 'Cy')} slotKey="s1" /></>, [SLOT])
-    await waitFor(() => expect(headings()).toEqual(['You', 'Cy']))
+    await waitFor(() => expect(headings()).toEqual(['You', 'Cy']), { timeout: CHAIN_TIMEOUT_MS })
+  })
+
+  it('names the session creator, never You, while the viewer read is pending', async () => {
+    viewer.mockReturnValue(new Promise(() => {}))
+    mount(<><SpeakerHeading meta={authored('p_ann', 'Ann')} slotKey="s1" /><SpeakerHeading meta={authored('p_cy', 'Cy')} slotKey="s1" /></>, [SLOT])
+    await waitFor(() => expect(headings()).toEqual(['Ann', 'Cy']), { timeout: CHAIN_TIMEOUT_MS })
   })
 
   it('says You on a message with no author stamp', () => {
@@ -137,8 +230,15 @@ describe('useUserRowSpeaker', () => {
 
   it('names a teammate and says You for the viewer, as the heading does', async () => {
     mount(<><Spoken meta={authored('p_bob', 'Bob')} slotKey="s1" /><Spoken meta={authored('p_cy', 'Cy')} slotKey="s1" /></>, [SLOT])
-    await waitFor(() => expect(spoken()).toEqual(['You', 'Cy']))
+    await waitFor(() => expect(spoken()).toEqual(['You', 'Cy']), { timeout: CHAIN_TIMEOUT_MS })
     expect(owned()).toEqual(['true', 'false'])
+  })
+
+  it('names the session creator, never You, while the viewer read is pending', async () => {
+    viewer.mockReturnValue(new Promise(() => {}))
+    mount(<><Spoken meta={authored('p_ann', 'Ann')} slotKey="s1" /><Spoken meta={authored('p_cy', 'Cy')} slotKey="s1" /></>, [SLOT])
+    await waitFor(() => expect(spoken()).toEqual(['Ann', 'Cy']), { timeout: CHAIN_TIMEOUT_MS })
+    expect(owned()).toEqual(['false', 'false'])
   })
 
   it('says You on a message with no author stamp', () => {

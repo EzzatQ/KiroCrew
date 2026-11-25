@@ -347,6 +347,7 @@ from kiro_crew.slack.handler_runtime.commands import (  # noqa: F401
     _bang_title,
     _bang_voice,
     _bang_yolo,
+    _bot_switch_refusal,
     _handle_compact_command,
     _handle_cron_command,
     _handle_run_command,

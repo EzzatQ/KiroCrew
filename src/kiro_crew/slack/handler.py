@@ -470,6 +470,11 @@ from kiro_crew.slack.shared_access import (  # noqa: F401 - read by the owners
     SHARED_OWNER_ONLY_TEXT,
     shared_command_refused,
 )
+from kiro_crew.slack.stream_window import (  # noqa: F401 - read by the owners
+    CONTINUES_BELOW,
+    stream_clock,
+    stream_due_for_renewal,
+)
 from kiro_crew.slack.thread_parent import (  # noqa: F401 - read by the owners
     fetch_thread_parent,
     has_prior_turns,

@@ -85,7 +85,7 @@ Available to all allowed users (no `!` prefix needed):
 | `/kirocrew dashboard` | Same as `!dashboard` |
 | `/kirocrew agent` | Switch the active agent |
 | `/kirocrew bot` | List Crew Bots. Slack runs no slash command in a thread, so send `!bot <name>` as a thread's first message to run that thread as a Bot |
-| `/kirocrew conductor <goal>` | Owner only. Post the goal as a new message here and make its thread a Conductor thread: one way, only the owner's messages reach it, workers show as status. In an existing thread, send `!conductor [goal]` instead. Off until Conductor threads are turned on |
+| `/kirocrew conductor <goal>` | The owner, or a shared user (`slack.shared_access`). Post the goal as a new message here and make its thread a Conductor thread: one way, only the owner's and the starter's messages reach it, workers show as status. In an existing thread, send `!conductor [goal]` instead. Off until Conductor threads are turned on |
 | `/kirocrew voice` | Configure TTS voice settings |
 | `/kirocrew yolo` | Toggle auto-approve for all tool calls |
 | `/kirocrew config` | Edit the tracked-channel list (owner only); its user half is inert |
@@ -305,8 +305,10 @@ confirmed by Slack: remove them, or fix what their row says, first.
   `kirocrew config` gets the same check from the gateway before its first message
   counts.
 - **What they can do.** Talk to the bot in DMs, mentions and threads, `!stop`,
-  `!title`, `!compact`, answer question cards, answer the tool-approval
-  prompts their own turns post, and send or edit the review-mode draft of their
+  `!title`, `!compact`, `!bot`, `!conductor` and `/kirocrew conductor` (a Conductor
+  thread they start admits them and the owner only; worker cards stay the
+  owner's), answer question cards, answer the tool-approval prompts their own
+  turns post, and send or edit the review-mode draft of their
   own turn. On an agent other than Kiro CLI, KAS or Claude Code, and for a
   call a background sub-agent makes, the approval prompt goes to the owner.
 - **What stays the owner's.** The access list and the switch; Trust, YOLO and
@@ -314,8 +316,8 @@ confirmed by Slack: remove them, or fix what their row says, first.
   prompt someone else's turn posted; `!dashboard` and other dashboard links; every
   other `!` command, including `!channel` and agent overrides, and the
   `!temporary` / `!incognito` modifiers; a message that starts with `/` (the
-  agent's own commands such as `/agent`, `/model` or `/tools`); the `/kirocrew`
-  slash command; the Home tab and the `sessions` list; the `spawn`, `status`, cron and `run`
+  agent's own commands such as `/agent`, `/model` or `/tools`); the other `/kirocrew`
+  slash commands; the Home tab and the `sessions` list; the `spawn`, `status`, cron and `run`
   keywords (the agent's own schedule tools are not narrowed, see below); Slack
   settings and the manifest; and code channels (a shared
   user's messages and card answers in one are refused, quietly in a bound channel

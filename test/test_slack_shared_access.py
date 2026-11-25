@@ -1087,6 +1087,7 @@ _ADMISSION_SITES = {
     "slack/events.py",
     "slack/events_inbound.py",
     "slack/events_queue.py",
+    "slack/events_slash.py",  # `/kirocrew conductor` only
     "slack/handler_runtime/commands.py",
     "slack/handler_runtime/inbound.py",
     "slack/handler_runtime/permission_ladder.py",

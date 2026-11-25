@@ -734,9 +734,10 @@ async def handle_interaction(
             from kiro_crew.slack.turn_requester import live_card_requester
 
             _asker = live_card_requester(_linked)
-            # A code channel's session is reached only through the opener gate
-            # above, never as a requester: a session relinked to another thread
-            # keeps its requester, so the card it posts there is not theirs.
+            # A code channel's or Conductor thread's session is reached as a
+            # requester only by its opener, in its own channel: a session relinked
+            # to another thread keeps its requester, so the card it posts there is
+            # not theirs.
             _cc_slots = tuple(s for s in (_linked.slot_key, _linked.session_key) if s)
         _refusal = (
             "trust is owner-only"
@@ -748,7 +749,12 @@ async def handle_interaction(
                 if not is_shared_user(user_id)
                 else (
                     "code channel is owner-only"
-                    if any(shared_user_refused_for_slot(s, thread_ts) for s in _cc_slots)
+                    # The opener of the Conductor thread or code channel this card
+                    # is in still reaches its own session (requester rule below).
+                    if any(
+                        shared_user_refused_for_slot(s, thread_ts, sender=user_id, channel=channel)
+                        for s in _cc_slots
+                    )
                     else ("not the requester" if not _asker or _asker != user_id else "")
                 )
             )

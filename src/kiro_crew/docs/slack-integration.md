@@ -26,6 +26,7 @@ Only the owner (set via `KIROCREW_OWNER_ID`) can use these:
 | Command | Description |
 |---------|-------------|
 | `!yolo` / `!yolo on/off/renew` | Show, toggle, or renew auto-approve for all tool calls |
+| `!trust` / `!trust off` / `!trust status` | Put this thread's session on Trust (its tools run without asking), take it off, or show it. See "Trust one thread" below |
 | `!agent <name>` | Switch to a different agent globally |
 | `!agent off` | Switch back to default kirocrew agent |
 | `!ta <name>` | Set agent for this thread only |
@@ -110,6 +111,22 @@ When Kiro Crew needs to run a tool (file write, bash command, etc.):
    channels that prompt at all wait five minutes, and four channels do not
    prompt. See [Channel capabilities](channel-capabilities.md).
 4. In interactive mode, "Trust session" approves all remaining tools for that session
+
+### Trust one thread
+
+`!trust` puts the thread you type it in on Trust before any tool asks. Its tools then
+run without a prompt; the deny list, sensitive paths and your organization's policy
+still refuse what they refuse. It is owner-only and works in DMs and channel threads.
+`!trust off` turns it off. `!trust status` shows it.
+
+The grant covers that one thread's session and lasts until `!trust off` or a gateway
+restart. A shared user's turn in a trusted thread still asks. Sent while the thread
+is working, `!trust` and `!trust off` wait for that turn to end; `!stop` ends it now.
+Helper agents the thread starts still ask.
+
+A Slack Code channel or Conductor thread has its own setting: use
+`/kirocrew approval trust` there. A thread linked to a dashboard chat follows that
+chat: set Trust in the chat's approval picker.
 
 Approval buttons appear in both Slack and the dashboard. Approving in either
 place resolves both.

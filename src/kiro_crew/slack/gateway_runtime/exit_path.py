@@ -708,6 +708,14 @@ async def _shutdown_and_exit(
         or listener_guard_exit_code(
             getattr(self.dashboard_state, "_secondary_listener_guard", None)
         )
+        # An entry-port listener that could not be rebound exits the same way.
+        or max(
+            (
+                listener_guard_exit_code(guard)
+                for guard in getattr(self.dashboard_state, "_entry_listener_guards", None) or ()
+            ),
+            default=0,
+        )
     )
 
     # Drop this gateway's run-marker BEFORE _shutdown() releases the

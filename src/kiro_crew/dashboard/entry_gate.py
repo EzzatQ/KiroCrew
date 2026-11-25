@@ -6,8 +6,8 @@ which is what a program on this machine looks like. So the proxy gets a port of 
 own (``dashboard.entry_port``, off by default), bound on both loopback addresses
 (``127.0.0.1`` and ``::1``) beside the gateway's, and a request came through the
 entry because of the port it arrived on, never because of anything it says. This is
-the SSM listener's rule (:mod:`kiro_crew.dashboard.ssm_gate`). Linux and macOS only
-for now: on Windows a non-zero port stops the start.
+the SSM listener's rule (:mod:`kiro_crew.dashboard.ssm_gate`). On Windows each entry
+listener has a listener guard (``listener_claims._arm_entry_listener_guards``).
 
 :func:`entry_gate_middleware` runs in the dashboard chain, the one beside which the
 entry port opens, just inside the relay header strip. Route latency, the Dashboard
@@ -43,7 +43,6 @@ from dataclasses import dataclass
 
 from aiohttp import web
 
-from kiro_crew import platform_compat
 from kiro_crew.dashboard.crew_api_auth import bearer_credential
 from kiro_crew.dashboard.crew_api_errors import (
     contract_error,
@@ -137,8 +136,7 @@ class GateRef:
 def configured_port(value: object, dashboard_port: int, ssm_port: int | None = None) -> int:
     """The entry port *value* asks for, ``0`` when it is off.
 
-    Raises :class:`EntryPortError` for a non-integer, any non-zero port on Windows,
-    an integer that is neither ``0`` nor a port from :data:`PORT_MIN` to
+    Raises :class:`EntryPortError` for a non-integer, an integer that is neither ``0`` nor a port from :data:`PORT_MIN` to
     :data:`PORT_MAX`, the gateway's own port, or *ssm_port* (the SSM listener's
     port, passed only when that listener is configured to run). Shared config
     validation runs before this check: wrong types become the default ``0`` with a
@@ -148,12 +146,6 @@ def configured_port(value: object, dashboard_port: int, ssm_port: int | None = N
         raise EntryPortError("dashboard.entry_port must be a whole number")
     if value == 0:
         return 0
-    # shortcut: no listener guard for the entry port on Windows, so the setting is
-    # refused there; lift when the entry port has a listener guard.
-    if platform_compat.IS_WINDOWS:
-        raise EntryPortError(
-            "dashboard.entry_port is for Linux and macOS for now; set it to 0 on Windows"
-        )
     if not PORT_MIN <= value <= PORT_MAX:
         raise EntryPortError(f"dashboard.entry_port must be 0 or {PORT_MIN} to {PORT_MAX}")
     if value == dashboard_port:

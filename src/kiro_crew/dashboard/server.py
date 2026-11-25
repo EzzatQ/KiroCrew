@@ -309,8 +309,11 @@ from kiro_crew.dashboard.server_runtime.listener import (  # noqa: F401
     _start_unix_site,
 )
 from kiro_crew.dashboard.server_runtime.listener_claims import (  # noqa: F401
+    _arm_entry_listener_guards,
     _arm_listener_guard,
     _arm_secondary_listener_guard,
+    _entry_listener_probe,
+    _listener_closed_before_arming,
     _live_sibling_port,
     _note_listener_sidecar,
     _reconcile_listener_publication,
@@ -1332,7 +1335,7 @@ async def start_dashboard(
         # The entry port, when the owner set one. Inside this guard: a port that
         # cannot be bound stops the start, and the cleanup below closes what was
         # opened.
-        await entry_gate.start(
+        _entry_sites = await entry_gate.start(
             _entry_ref,
             runner,
             _cfg.dashboard.entry_port,
@@ -1358,6 +1361,28 @@ async def start_dashboard(
     # The listener is up -- keep it up. One failed accept() on Windows would
     # otherwise close it for the life of the process (see listener_guard).
     _arm_listener_guard(state, runner, site)
+    _arm_entry_listener_guards(state, runner, _entry_sites)
+    # The entry binds above are awaits, so a listener may have died before its
+    # guard was armed. Such a guard has no name to rebind: stop here, before
+    # anything is published, and exit as a guard that cannot rebind does.
+    if _listener_closed_before_arming(state):
+        logger.critical(
+            "A listener closed during startup, before its guard was armed; exiting "
+            "with status %d so the supervisor restarts the gateway",
+            LISTENER_LOST_EXIT_CODE,
+        )
+        # Before the first await: a guard still armed would rebind a listener
+        # while the cleanup closes it. Newest first; the cleanup hook's second
+        # stop of each guard does nothing.
+        for _armed in (*reversed(state._entry_listener_guards), state._listener_guard):
+            if _armed is not None:
+                _armed.stop()
+        with contextlib.suppress(Exception):
+            await runner.cleanup()
+        with contextlib.suppress(Exception):
+            await _stop_spawned_backends()
+        _dashboard_sock.close()
+        raise SystemExit(LISTENER_LOST_EXIT_CODE)
     start_shared_crew_maintenance()
     # One-time prune of the crewmates an enrol-on-mount agent sync generated
     # from the user's own specs (see crewmate_prune_migration). Kicked here,
@@ -1381,7 +1406,9 @@ async def start_dashboard(
     # binding the second family on it lands on an unrelated ephemeral port while
     # the sidecar is filed under the real one -- which would publish coverage for
     # an address nothing listens on and leave the real one free for anyone to take.
-    _bound_port = _resolved_bound_port(runner, port)
+    # It is the port of the socket this gateway reserved, not the first address of
+    # the runner: the runner holds other listeners too, in an order a rebind changes.
+    _bound_port = _served_port
     # The gateway announces this to the MCP gateway daemon it owns.
     state._listener_bound_port = _bound_port
     # Additional kernel-verifiable transport for the internal API (POSIX only;

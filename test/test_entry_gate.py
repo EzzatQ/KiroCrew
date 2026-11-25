@@ -9,10 +9,15 @@ port and the entry port. Each test sends the same request to one or both.
 
 from __future__ import annotations
 
+import ast
+import asyncio
 import errno
+import inspect
 import json
 import logging
 import socket
+import sys
+import textwrap
 from contextlib import ExitStack, contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -44,6 +49,11 @@ from kiro_crew.dashboard import token_auth as ta
 from kiro_crew.dashboard.crew_api_errors import is_owner_path
 from kiro_crew.dashboard.kiro_relay.ingress import relay_ingress_middleware
 from kiro_crew.dashboard.kiro_relay.limits import LOCAL_CREDENTIAL_HEADERS
+from kiro_crew.dashboard.listener_guard import (
+    LISTENER_LOST_EXIT_CODE,
+    ListenerGuard,
+    listener_guard_exit_code,
+)
 from kiro_crew.dashboard.origin import (
     ENTRY_REQUEST_KEY,
     is_direct_local_request,
@@ -54,6 +64,8 @@ from kiro_crew.dashboard.relay_headers import relay_header_strip_middleware
 from kiro_crew.dashboard.routes import crew_api
 from kiro_crew.dashboard.tailnet import TailnetTrust
 from kiro_crew.dashboard.token_auth import token_auth_middleware
+from kiro_crew.slack.gateway import GatewayOrchestrator
+from kiro_crew.testing.wait import async_wait_until
 
 MODELS = "/v1/models"
 PROBE = "/v1/crew/probe"
@@ -124,16 +136,21 @@ async def _two_ports(monkeypatch, auth, *, ipv6=False):
         try:
             await client.start_server()
             runner = client.server.runner
+            entry_sites = []
             if ipv6:
                 entry = stack.enter_context(_reserved_loopback_sockets(ipv6=True))
                 entry_port = entry["127.0.0.1"].getsockname()[1]
-                for sock in [own["::1"], *entry.values()]:
-                    await web.SockSite(runner, sock).start()
+                entry_sites = [web.SockSite(runner, sock) for sock in entry.values()]
+                for site in [web.SockSite(runner, own["::1"]), *entry_sites]:
+                    await site.start()
             else:
-                await web.TCPSite(runner, entry_gate.BIND_ADDRESS, 0).start()
+                entry_sites = [web.TCPSite(runner, entry_gate.BIND_ADDRESS, 0)]
+                await entry_sites[0].start()
                 entry_port = next(addr[1] for addr in runner.addresses if addr[1] != client.port)
             ref.gate = entry_gate.EntryGate(port=entry_port)
-            yield _Gateway(client, entry_port)
+            served = _Gateway(client, entry_port)
+            served.entry_sites = entry_sites
+            yield served
         finally:
             await client.close()
 
@@ -661,34 +678,23 @@ async def test_a_host_naming_an_app_web_origin_reaches_no_app_backend_through_th
 
 
 @pytest.fixture
-def not_windows(monkeypatch):
-    """The value rules apart from the Windows refusal; reads no OS state."""
-    monkeypatch.setattr(platform_compat, "IS_WINDOWS", False)
+def any_platform(request, monkeypatch):
+    """The value rules are the same on Windows and elsewhere; reads no OS state."""
+    monkeypatch.setattr(platform_compat, "IS_WINDOWS", request.param)
 
 
-#: The tests below bind the entry port for real; on Windows a non-zero port is refused.
-_binds = pytest.mark.skipif(platform_compat.IS_WINDOWS, reason="the entry port is refused")
-
-
+@pytest.mark.parametrize("any_platform", [False, True], ids=["posix", "windows"], indirect=True)
 @pytest.mark.parametrize(("value", "port"), [(0, 0), (1024, 1024), (8443, 8443), (65535, 65535)])
-def test_a_port_in_range_is_taken_as_written(not_windows, value, port) -> None:
+def test_a_port_in_range_is_taken_as_written(any_platform, value, port) -> None:
     assert entry_gate.configured_port(value, 5476) == port
 
 
-def test_the_ssm_port_is_refused_only_while_the_ssm_listener_runs(not_windows) -> None:
+def test_the_ssm_port_is_refused_only_while_the_ssm_listener_runs() -> None:
     """server.py passes the SSM port only when that listener is configured to run."""
     with pytest.raises(entry_gate.EntryPortError, match="ssm_port"):
         entry_gate.configured_port(8443, 5476, ssm_port=8443)
     assert entry_gate.configured_port(8443, 5476, ssm_port=None) == 8443
     assert entry_gate.configured_port(8443, 5476, ssm_port=9443) == 8443
-
-
-@pytest.mark.parametrize("value", [1024, 8443, 65535, 80, 65536])
-def test_any_non_zero_port_is_refused_on_windows(monkeypatch, value) -> None:
-    monkeypatch.setattr(platform_compat, "IS_WINDOWS", True)
-    with pytest.raises(entry_gate.EntryPortError, match="Linux and macOS"):
-        entry_gate.configured_port(value, 5476)
-    assert entry_gate.configured_port(0, 5476) == 0
 
 
 @pytest.mark.parametrize("value", [-1, 1, 80, 1023, 65536, 5476, True, "8443", 8443.0, None])
@@ -707,7 +713,7 @@ def test_a_wrong_port_is_refused_not_rounded(value) -> None:
         *[({"entry_port": port}, port) for port in (-1, 1, 80, 1023, 65536, 5476)],
     ],
 )
-def test_the_config_reads_the_port_without_clamping_it(not_windows, stored, read) -> None:
+def test_the_config_reads_the_port_without_clamping_it(stored, read) -> None:
     data = validate_config_data({"dashboard": stored})
     port = _build_dashboard_config(set(), data["dashboard"]).entry_port
     assert type(port) is int
@@ -850,23 +856,323 @@ async def test_off_binds_nothing(runner, monkeypatch, windows) -> None:
     assert runner.addresses == []
 
 
+# ── the listener guards of the entry port (Windows) ──────────────────────────
+
+
+@contextmanager
+def _entry_guards(monkeypatch, runner, sites, *, windows=True):
+    """Arm the entry guards as ``start_dashboard`` does; stop them newest first.
+
+    ``IS_WINDOWS`` is faked: the wiring is the same code on every host. The guards
+    get their own shutdown event, so a guard that gives up ends no other test.
+    """
+    monkeypatch.setattr(platform_compat, "IS_WINDOWS", windows)
+    stop = asyncio.Event()
+    monkeypatch.setattr(server, "shutdown_event", stop)
+    state = SimpleNamespace(_entry_listener_guards=[], stop=stop)
+    server._arm_entry_listener_guards(state, runner, sites)
+    try:
+        yield state
+    finally:
+        for guard in reversed(state._entry_listener_guards):
+            guard.stop()
+
+
+def _listens_on(guard) -> tuple[str, int]:
+    return guard.site._server.sockets[0].getsockname()[:2]
+
+
 @pytest.mark.asyncio
-async def test_a_set_port_on_windows_stops_the_start_before_any_bind(runner, monkeypatch) -> None:
-    """Faked on any host: the refusal comes before the bind helper is reached."""
+@pytest.mark.parametrize("windows", [False, True], ids=["posix", "windows"])
+async def test_each_entry_listener_gets_a_guard_on_windows_only(
+    runner, monkeypatch, reserved_sockets, windows
+) -> None:
+    _record_binds(monkeypatch, reserved_sockets)
+    port = reserved_sockets["127.0.0.1"].getsockname()[1]
+    sites = await entry_gate.start(entry_gate.GateRef(), runner, port, 5476)
+    assert sites
+    with _entry_guards(monkeypatch, runner, sites, windows=windows) as state:
+        guards = state._entry_listener_guards
+        assert [guard.site for guard in guards] == (sites if windows else [])
+        assert all(guard.port == port for guard in guards)
+
+
+@pytest.mark.asyncio
+async def test_an_entry_port_that_is_off_gets_no_guard(runner, monkeypatch) -> None:
+    sites = await entry_gate.start(entry_gate.GateRef(), runner, 0, 5476)
+    with _entry_guards(monkeypatch, runner, sites) as state:
+        assert state._entry_listener_guards == []
+
+
+@_needs_ipv6
+@pytest.mark.asyncio
+async def test_a_rebound_entry_listener_keeps_its_address_and_every_entry_rule(
+    ipv6_gateway, monkeypatch
+) -> None:
+    """Both listeners are closed and rebound; the rules follow the port, not the site."""
+    gateway = ipv6_gateway
+    port = gateway.entry_port
+    runner = gateway.client.server.runner
+    owner = _bearer(_session_token(OWNER))
+    real, rebound = server._bind_once, []
+
+    def _bind(host, port_):
+        rebound.append((host, port_))
+        return real(host, port_)
+
+    monkeypatch.setattr(server, "_bind_once", _bind)
+    with _entry_guards(monkeypatch, runner, gateway.entry_sites) as state:
+        guards = state._entry_listener_guards
+        assert [_listens_on(guard) for guard in guards] == [("127.0.0.1", port), (IPV6, port)]
+        for guard, first in zip(guards, gateway.entry_sites, strict=True):
+            assert await guard._recover("test") is True
+            assert guard.site is not first
+            assert isinstance(guard.site, web.SockSite)
+        assert rebound == [("127.0.0.1", port), (IPV6, port)]
+        assert [_listens_on(guard) for guard in guards] == [("127.0.0.1", port), (IPV6, port)]
+        assert sorted(addr[:2] for addr in runner.addresses if addr[1] == port) == [
+            ("127.0.0.1", port),
+            (IPV6, port),
+        ]
+        get = gateway.client.session.get
+        for host in ("127.0.0.1", f"[{IPV6}]"):
+            base = f"http://{host}:{port}"
+            assert (await get(base + MODELS)).status == 401
+            assert (await get(base + MODELS, headers=owner)).status == 200
+            assert (await get(base + "/api/health", headers=owner)).status == 404
+            assert (await get(base + "/v1/crew/owner/bots", headers=owner)).status == 403
+            probe = await get(base + PROBE, headers=owner)
+            assert await probe.json() == {"direct_local": False, "forwarded": True}
+
+
+@pytest.mark.asyncio
+async def test_the_guard_check_of_an_entry_listener_sends_no_request(
+    runner, monkeypatch, reserved_sockets
+) -> None:
+    """A request to the entry port would be judged, refused and written to the log."""
+    _record_binds(monkeypatch, reserved_sockets)
+    port = reserved_sockets["127.0.0.1"].getsockname()[1]
+    sites = await entry_gate.start(entry_gate.GateRef(), runner, port, 5476)
+
+    async def _no_connection(*args, **kwargs):
+        raise AssertionError("the entry guard opened a connection")
+
+    monkeypatch.setattr(asyncio, "open_connection", _no_connection)
+    with _entry_guards(monkeypatch, runner, sites) as state:
+        for guard in state._entry_listener_guards:
+            assert guard._probe is server._entry_listener_probe
+            assert await guard._probe_once() is True
+            assert await guard.check_now("test") is True
+            assert guard.recoveries == 0
+
+
+@pytest.mark.asyncio
+async def test_an_entry_listener_that_cannot_be_rebound_exits_the_gateway(
+    runner, monkeypatch, reserved_sockets
+) -> None:
+    _record_binds(monkeypatch, reserved_sockets)
+    port = reserved_sockets["127.0.0.1"].getsockname()[1]
+    sites = await entry_gate.start(entry_gate.GateRef(), runner, port, 5476)
+    asked = []
+
+    def _taken(host, port_):
+        asked.append((host, port_))
+        raise OSError(errno.EADDRINUSE, "address in use")
+
+    monkeypatch.setattr(server, "_bind_once", _taken)
+    with _entry_guards(monkeypatch, runner, sites[:1]) as state:
+        (guard,) = state._entry_listener_guards
+        guard._max_attempts, guard._backoff_base = 2, 0
+        assert await guard._recover("test") is False
+        assert asked == [("127.0.0.1", port)] * 2
+        assert guard.exit_code == LISTENER_LOST_EXIT_CODE == 69
+        assert state.stop.is_set()
+        assert listener_guard_exit_code(guard) == 69
+        assert _exit_status_reads_the_entry_guards()
+
+
+@pytest.mark.asyncio
+async def test_a_listener_already_closed_when_its_guard_was_armed_is_reported(
+    runner, monkeypatch, reserved_sockets
+) -> None:
+    """A closed socket has no name to rebind, so the boot must learn of it and stop."""
+    _record_binds(monkeypatch, reserved_sockets)
+    port = reserved_sockets["127.0.0.1"].getsockname()[1]
+    sites = await entry_gate.start(entry_gate.GateRef(), runner, port, 5476)
+    closed = SimpleNamespace(listener_open=lambda: False)
+    assert server._listener_closed_before_arming(SimpleNamespace()) is False
+    with _entry_guards(monkeypatch, runner, sites) as state:
+        guard, *_others = state._entry_listener_guards
+        assert server._listener_closed_before_arming(state) is False
+        state._listener_guard = None
+        assert server._listener_closed_before_arming(state) is False
+        state._listener_guard = closed
+        assert server._listener_closed_before_arming(state) is True
+        state._listener_guard = SimpleNamespace(listener_open=lambda: True)
+        assert server._listener_closed_before_arming(state) is False
+        # What a failed accept leaves on Windows, read through the guard's own evidence
+        # reader so the selector loop's bookkeeping of the real socket is not disturbed.
+        monkeypatch.setattr(guard, "listener_open", lambda: False)
+        assert server._listener_closed_before_arming(state) is True
+
+
+def test_the_boot_asks_for_closed_listeners_right_after_arming_the_guards() -> None:
+    """Nothing is awaited between the entry listeners' start and the question.
+
+    In ``start_dashboard``: the entry listeners start, the gateway's own guard and
+    the entry guards are armed, and the next statement stops the start with status
+    69 when a listener was already closed.
+    """
+    body = ast.parse(textwrap.dedent(inspect.getsource(server.start_dashboard))).body[0].body
+    source = [ast.unparse(node) for node in body]
+    started = next(
+        index
+        for index, node in enumerate(body)
+        if isinstance(node, ast.Try) and "entry_gate.start(" in ast.unparse(node.body)
+    )
+    armed = source.index("_arm_listener_guard(state, runner, site)")
+    assert started < armed
+    assert not any(
+        isinstance(inner, ast.Await)
+        for node in body[started + 1 : armed]
+        for inner in ast.walk(node)
+    )
+    assert source[armed + 1] == "_arm_entry_listener_guards(state, runner, _entry_sites)"
+    asked = body[armed + 2]
+    assert isinstance(asked, ast.If)
+    assert ast.unparse(asked.test) == "_listener_closed_before_arming(state)"
+    assert ast.unparse(asked.body[-1]) == "raise SystemExit(LISTENER_LOST_EXIT_CODE)"
+    assert not asked.orelse
+
+
+def _exit_status_reads_the_entry_guards() -> bool:
+    """Whether the gateway's exit status has the term that reads every entry guard."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(GatewayOrchestrator._shutdown_and_exit)))
+    terms = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "id", "") == "max"
+        and "_entry_listener_guards" in ast.unparse(node)
+    ]
+    assert len(terms) == 1
+    # The largest code of the entry guards, 0 when there is none.
+    assert ast.unparse(terms[0]) == (
+        "max((listener_guard_exit_code(guard) for guard in"
+        " getattr(self.dashboard_state, '_entry_listener_guards', None) or ()), default=0)"
+    )
+    # It is one operand of the ``or`` that makes the exit status, beside the others.
+    return any(
+        isinstance(node, ast.BoolOp)
+        and isinstance(node.op, ast.Or)
+        and terms[0] in node.values
+        and "shutdown_exit_code" in ast.unparse(node)
+        for node in ast.walk(tree)
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the proactor accept path is Windows-only")
+@pytest.mark.asyncio
+async def test_windows_accept_failure_on_an_entry_listener_is_recovered(
+    gateway, monkeypatch
+) -> None:
+    """One failing AcceptEx completion closes the listener; the guard brings it back."""
+    loop = asyncio.get_running_loop()
+    assert isinstance(loop, asyncio.ProactorEventLoop)
+    port = gateway.entry_port
+    owner = _bearer(_session_token(OWNER))
+    with _entry_guards(monkeypatch, gateway.client.server.runner, gateway.entry_sites) as state:
+        (guard,) = state._entry_listener_guards
+        old_site = guard.site
+        old_sock = old_site._server.sockets[0]._sock
+        proactor = loop._proactor
+        real_accept = proactor.accept
+        injected = []
+
+        def _accept_once_failing(sock):
+            if not injected and sock is old_sock:
+                injected.append(sock)
+                failed = loop.create_future()
+                loop.call_soon(
+                    failed.set_exception,
+                    OSError(64, "The specified network name is no longer available"),
+                )
+                return failed
+            return real_accept(sock)
+
+        monkeypatch.setattr(proactor, "accept", _accept_once_failing)
+        # The pending real accept completes with this connection; the next accept the
+        # loop arms on the listener is the failing one.
+        _reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        writer.close()
+        await async_wait_until(lambda: bool(injected))
+        await async_wait_until(lambda: old_sock.fileno() == -1)
+        await async_wait_until(lambda: guard.site is not old_site)
+        assert _listens_on(guard) == ("127.0.0.1", port)
+        assert guard.recoveries == 1
+        assert guard.exit_code == 0
+        assert not state.stop.is_set()
+        assert (await gateway.send(MODELS, entry=True)).status == 401
+        assert (await gateway.send(MODELS, entry=True, headers=owner)).status == 200
+        assert (await gateway.send("/api/health", entry=True, headers=owner)).status == 404
+        refused = await gateway.send("/v1/crew/owner/bots", entry=True, headers=owner)
+        assert refused.status == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stopped_first", [False, True], ids=["shutdown", "failed start"])
+async def test_cleanup_stops_the_guards_newest_first_and_unwinds_the_chain(
+    monkeypatch, reserved_sockets, stopped_first
+) -> None:
+    """Armed as at boot: primary, entry, secondary. Guards chain on the loop's handler.
+
+    A start that fails after arming stops the guards itself before the cleanup; the
+    cleanup hook then stops each a second time, which must change nothing.
+    """
+    _record_binds(monkeypatch, reserved_sockets)
+    port = reserved_sockets["127.0.0.1"].getsockname()[1]
+    loop = asyncio.get_running_loop()
+    before = loop.get_exception_handler()
+    app = web.Application()
+    state = SimpleNamespace(_entry_listener_guards=[])
+    server._register_listener_guard_shutdown(app, state)
+    built = web.AppRunner(app)
+    await built.setup()
+    own = web.TCPSite(built, "127.0.0.1", 0)
+    await own.start()
+    state._listener_guard = ListenerGuard(built, own, asyncio.Event())
+    state._listener_guard.arm()
+    sites = await entry_gate.start(entry_gate.GateRef(), built, port, 5476)
     monkeypatch.setattr(platform_compat, "IS_WINDOWS", True)
+    monkeypatch.setattr(server, "shutdown_event", asyncio.Event())
+    server._arm_entry_listener_guards(state, built, sites)
+    other = web.TCPSite(built, "127.0.0.1", 0)
+    await other.start()
+    state._secondary_listener_guard = ListenerGuard(built, other, asyncio.Event())
+    state._secondary_listener_guard.arm()
+    guards = [
+        state._listener_guard,
+        *state._entry_listener_guards,
+        state._secondary_listener_guard,
+    ]
+    assert len(guards) == 2 + len(sites)
+    stopped = []
+    for guard in guards:
+        real = guard.stop
+        guard.stop = lambda guard=guard, real=real: (stopped.append(guard), real())[1]
 
-    def _no_bind(host, port):
-        raise AssertionError("bound on Windows")
+    if stopped_first:
+        for guard in guards[::-1]:
+            guard.stop()
+        assert loop.get_exception_handler() is before
+    await built.cleanup()
 
-    monkeypatch.setattr(server, "_bind_once", _no_bind)
-    ref = entry_gate.GateRef()
-    with pytest.raises(entry_gate.EntryPortError, match="Linux and macOS"):
-        await entry_gate.start(ref, runner, 8443, 5476)
-    assert ref.gate is None
-    assert runner.addresses == []
+    assert stopped == guards[::-1] * (2 if stopped_first else 1)
+    assert all(guard._probe_task is None and guard.exit_code == 0 for guard in guards)
+    assert all(guard.recoveries == 0 for guard in guards)
+    assert loop.get_exception_handler() is before
 
 
-@_binds
 @pytest.mark.asyncio
 async def test_the_ssm_port_stops_the_start_and_binds_nothing(
     runner, monkeypatch, reserved_sockets
@@ -882,7 +1188,6 @@ async def test_the_ssm_port_stops_the_start_and_binds_nothing(
     _assert_nothing_left(runner, ref, port)
 
 
-@_binds
 @pytest.mark.asyncio
 async def test_a_port_already_in_use_stops_the_start_and_leaves_no_gate(runner) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as held:
@@ -896,11 +1201,17 @@ async def test_a_port_already_in_use_stops_the_start_and_leaves_no_gate(runner) 
 
 
 def _record_binds(monkeypatch, reserved_sockets) -> list[tuple[str, int]]:
-    """Record bind requests and hand over sockets that have stayed bound for real."""
+    """Record bind requests and hand over sockets that have stayed bound for real.
+
+    On a host with no IPv6 loopback the fixture reserved no ``::1`` socket, and a
+    bind of ``::1`` fails as it does there, so the entry port starts on 127.0.0.1 alone.
+    """
     asked: list[tuple[str, int]] = []
 
     def _bind(host, port):
         asked.append((host, port))
+        if host not in reserved_sockets:
+            raise OSError(errno.EADDRNOTAVAIL, "Cannot assign requested address")
         sock = reserved_sockets[host]
         assert sock.getsockname()[1] == port
         return sock
@@ -928,7 +1239,6 @@ def test_the_host_hint_names_every_host_the_entry_port_accepts() -> None:
     assert len(entry_gate._LOOPBACK_HOSTS) == 3
 
 
-@_binds
 @pytest.mark.asyncio
 async def test_the_log_line_of_an_open_port_carries_the_host_hint(
     runner, monkeypatch, reserved_sockets, caplog
@@ -951,7 +1261,6 @@ async def test_the_log_line_of_an_open_port_carries_the_host_hint(
     assert opened[0] == f"entry port {port} on 127.0.0.1 (Crew API only); {entry_gate.HOST_HINT}"
 
 
-@_binds
 @_needs_ipv6
 @pytest.mark.asyncio
 async def test_both_loopback_addresses_are_bound(runner, monkeypatch, reserved_sockets) -> None:
@@ -974,7 +1283,6 @@ async def test_both_loopback_addresses_are_bound(runner, monkeypatch, reserved_s
     assert taken.value.errno == errno.EADDRINUSE
 
 
-@_binds
 @_needs_ipv6
 @pytest.mark.asyncio
 async def test_ipv6_loopback_already_held_stops_the_start_and_binds_nothing(
@@ -1009,7 +1317,6 @@ def _ipv6_bind_raises(monkeypatch, exc: OSError) -> None:
     monkeypatch.setattr(server, "_bind_once", _bind)
 
 
-@_binds
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "exc",
@@ -1033,7 +1340,6 @@ async def test_without_ipv6_loopback_the_port_starts_on_127_0_0_1(
     assert ref.gate == entry_gate.EntryGate(port=port)
 
 
-@_binds
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "code", [errno.EADDRINUSE, errno.EACCES, errno.EINVAL], ids=["EADDRINUSE", "EACCES", "EINVAL"]
@@ -1051,7 +1357,6 @@ async def test_any_other_ipv6_bind_error_stops_the_start_and_binds_nothing(
     _assert_nothing_left(runner, ref, port)
 
 
-@_binds
 @pytest.mark.asyncio
 async def test_a_site_that_fails_to_start_leaves_nothing_bound(
     runner, monkeypatch, reserved_sockets

@@ -683,11 +683,25 @@ serves `127.0.0.1` alone and starts. `dashboard.entry_port` is one value per dat
 home, so a second gateway started on the same data home (another `--port`) finds
 the entry port held by the first and does not start (`EntryPortError`).
 
-The entry port is for Linux and macOS only for now: on Windows any non-zero value
-stops the gateway's start (`EntryPortError`), because the entry port has no
-listener guard there and one failed accept would close it for good.
+On Windows one failed accept closes a listening socket for good, so each entry
+listener has a listener guard there (`_arm_entry_listener_guards` in
+`server_runtime/listener_claims.py`; none is armed on Linux and macOS). A guard
+rebinds the loopback address and port it read from the live socket, through
+`_bind_once`. Its probe sends no request, so it writes no row to the security event
+log: it checks that the listening socket is open and hears a failed accept from the
+event loop. When a guard cannot rebind, the gateway exits with status 69
+(`LISTENER_LOST_EXIT_CODE`) so that a supervisor restarts it. The entry guards
+are armed right after the guard of the gateway's own listener, and the guards are
+stopped in the reverse of the order they were armed. The entry binds are awaits
+between a listener's start and its guard, so the start then asks whether the
+gateway's own listener or an entry listener is already closed
+(`_listener_closed_before_arming`). If one is, the start stops the guards, publishes
+nothing, releases what it holds and exits with status 69. The port the gateway publishes and reports
+under `--port auto` is the port of the socket it reserved (`served_port`), not the
+first address of the runner, so another listener on the runner does not change it. A restart
+on Windows right after the entry port served requests may fail to bind it (#42255).
 
-The Windows rule and the values below stop the regular and the headless
+The values below stop the regular and the headless
 `kirocrew gateway` only: the API-only server (`--slack-only`) does not check the
 value, logs its warning and starts.
 

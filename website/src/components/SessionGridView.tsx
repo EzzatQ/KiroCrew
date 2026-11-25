@@ -297,7 +297,8 @@ function PlaceholderPane({
   const dispatch = useAppDispatch()
   // Same key and shape the transcript path reads, so the two share one cache entry
   const createSession = useMutation({
-    mutationFn: () => api.createChatSlot(),
+    // The person's own New session: it starts on their stored approval mode.
+    mutationFn: () => api.createChatSlot(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, true),
     onSuccess: (r: { key?: string }) => {
       queryClient.invalidateQueries({ queryKey: ['session-grid-slots'] })
       if (r?.key) onPick(r.key)

@@ -475,7 +475,8 @@ export function useSceneInteraction(
   const createSession = useCallback(async () => {
     setCreating(true)
     try {
-      await api.createChatSlot()
+      // The person's own New session: it starts on their stored approval mode.
+      await api.createChatSlot(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, true)
     } catch { /* button re-enables; slot list unchanged */ }
     setCreating(false)
   }, [])

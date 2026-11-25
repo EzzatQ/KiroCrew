@@ -29,6 +29,7 @@ from kiro_crew.config.loader import ACTIVATION_REVIEW
 from kiro_crew.messaging.link import canonical_key
 from kiro_crew.sel import sel
 from kiro_crew.session import unlink_queued_temp_paths
+from kiro_crew.slack import channel_handler
 from kiro_crew.slack.enterprise import validated_self_user_id
 from kiro_crew.slack.handler import is_allowed_user, is_shared_user
 from kiro_crew.slack.shared_access import prime_shared_user
@@ -267,8 +268,9 @@ def _thread_follow_admits(
     The one admission rule for every activation mode that answers followed-thread
     replies without an @-mention (mention, review, observe). The message must be
     a reply in a thread this bot already holds a session, session link, or
-    conversation log for, with ``thread_follow`` on. A reply that opens with a
-    mention of someone else is addressed to them and skipped, so answering does
+    conversation log for, or that its channel's Bot or Conductor chat has answered
+    (:func:`kiro_crew.slack.channel_handler.answered`), with ``thread_follow`` on.
+    A reply that opens with a mention of someone else is addressed to them and skipped, so answering does
     not talk over the addressee. A reply that opens with (or is) a mention of this
     bot is admitted by that same rule: Slack also delivers it as a plain
     ``message`` event, which reaches here with ``is_mention`` False.
@@ -281,6 +283,7 @@ def _thread_follow_admits(
             orch.sessions.has_session(thread_ts)
             or orch.sessions.get_session_for_thread(thread_ts)
             or (orch.conv_log and orch.conv_log.has_log(thread_ts))
+            or channel_handler.answered(channel, thread_ts)
         )
     )
     if not in_active_thread:

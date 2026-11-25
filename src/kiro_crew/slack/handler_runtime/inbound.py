@@ -604,6 +604,7 @@ def _persist_channel_config(
     channel_id: str,
     activation: str | None = None,
     agent: str | None = None,
+    bot: str | None = None,
 ) -> None:
     """Update a single channel's config in config.json (merge, not overwrite)."""
     path = config_path()
@@ -632,6 +633,8 @@ def _persist_channel_config(
             ch["activation"] = activation
         if agent is not None:
             ch["agent"] = agent
+        if bot is not None:
+            ch["bot"] = bot
         return data
 
     try:
@@ -767,6 +770,49 @@ class LinkedRoute(enum.Enum):
 
 
 async def route_linked_thread(
+    text: str,
+    session_key: str,
+    user_id: str,
+    channel: str,
+    slack: SlackClientOps,
+    reply_ts: str,
+    target_slot: Any | None = None,
+    route_pinned: bool = False,
+    user_meta: dict[str, Any] | None = None,
+    turn_context: str | None = None,
+    interpret_commands: bool = True,
+    admit: Callable[[], Awaitable[bool]] | None = None,
+    had_voice_input: bool | None = None,
+) -> LinkedRoute:
+    """:func:`_route_linked_thread`, after a channel's Bot or Conductor claims the thread.
+
+    In a channel with a Channel Bot or Channel Conductor
+    (:mod:`kiro_crew.slack.channel_handler`), the handler chat is first pointed at
+    this thread, under the channel's lock so a second thread cannot move it before
+    this message's turn has started. A pinned route (an OPTIONS answer) and a
+    command are never claimed.
+    """
+    from kiro_crew.slack import channel_handler
+
+    kwargs: dict[str, Any] = {
+        "target_slot": target_slot,
+        "route_pinned": route_pinned,
+        "user_meta": user_meta,
+        "turn_context": turn_context,
+        "interpret_commands": interpret_commands,
+        "admit": admit,
+        "had_voice_input": had_voice_input,
+    }
+    args = (text, session_key, user_id, channel, slack, reply_ts)
+    if route_pinned or not interpret_commands or not await channel_handler.may_claim(channel, text):
+        return await _route_linked_thread(*args, **kwargs)
+    async with channel_handler.lock(channel):
+        if await channel_handler.claim(user_id, channel, slack, reply_ts):
+            return LinkedRoute.REFUSED
+        return await _route_linked_thread(*args, **kwargs)
+
+
+async def _route_linked_thread(
     text: str,
     session_key: str,
     user_id: str,

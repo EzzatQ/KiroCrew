@@ -95,9 +95,16 @@ class WorkerCard:
     answered: bool = False
     #: A click on this card answered it: that click writes its text.
     clicked: bool = False
-    #: The room the card was posted for (:func:`.thread_runtime.room_id`): a
-    #: Conductor thread's card answers only for its own thread.
+    #: The room the card answers for: a Channel Conductor's session stays the
+    #: same across anchor moves; an ordinary Conductor thread keeps its anchor.
     room: str = ""
+
+
+def _card_room(binding: Binding) -> str:
+    """An approval's identity survives a Channel Conductor moving to another thread."""
+    if binding.channel_wide:
+        return f"{binding.channel_id}:conductor:{binding.session_key}"
+    return thread_runtime.room_id(binding)
 
 
 #: Live cards by ``"<channel>:<ts>"``.
@@ -483,7 +490,7 @@ async def relay(
             rid,
             future,
             header,
-            room=thread_runtime.room_id(binding),
+            room=_card_room(binding),
         )
         _cards[f"{card.channel}:{card.ts}"] = card
         _audit(
@@ -615,9 +622,9 @@ async def handle_click(orch: Any, payload: dict[str, Any]) -> bool:
         or worker is None
         or live_binding is None
         or live_binding.channel_id != channel
-        # A card answers only for the room it was posted for: a thread's card
-        # never acts for another thread (or the channel) of the same channel.
-        or (card.room and card.room != thread_runtime.room_id(live_binding))
+        # A card stays with its Conductor session across channel-wide moves;
+        # an ordinary thread's card never acts for another thread in the channel.
+        or (card.room and card.room != _card_room(live_binding))
         or effective_session_key(worker) != card.session_key
         or card.future.done()
     ):

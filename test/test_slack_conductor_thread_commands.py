@@ -507,6 +507,31 @@ def test_slash_conductor_refused_room_posts_nothing(monkeypatch, dashboard):
     assert slack.posts == [] and "public channels are off" in replies[0]
 
 
+@pytest.mark.parametrize("handler", ["bot", "conductor"])
+def test_slash_conductor_in_a_channel_with_a_handler_posts_nothing(monkeypatch, dashboard, handler):
+    from kiro_crew.slack import channel_handler
+    from kiro_crew.slack.code_channels.store import store
+
+    _room(monkeypatch)
+    if handler == "bot":
+        monkeypatch.setattr(channel_handler, "channel_bot", lambda channel: "research")
+    else:
+        binding = Binding(
+            channel_id=PRIVATE,
+            team_id=TEAM,
+            session_key="chat-conductor",
+            anchor_ts=THREAD,
+            thread=True,
+            room=ROOM_PRIVATE,
+            channel_wide=True,
+        )
+        store().put_thread_binding(binding)
+    why = channel_handler.handler_refusal(PRIVATE)
+    assert why
+    slack, replies = _slash(monkeypatch, "fix the build")
+    assert slack.posts == [] and replies == [f"❌ {why}"]
+
+
 def test_overlapping_slash_conductors_each_post_where_they_were_typed(monkeypatch, dashboard):
     monkeypatch.setattr(ct, "refusal", AsyncMock(return_value=("", ROOM_PRIVATE)))
     monkeypatch.setattr(ct, "start", AsyncMock(return_value=(True, ct.STARTED_TEXT)))

@@ -34,7 +34,10 @@ Only the owner (set via `KIROCREW_OWNER_ID`) can use these:
 | `/agent <name>` | Same as `!ta <name>` (type a space first if Slack offers it as a slash command) |
 | `!channel` | Show current channel activation mode |
 | `!channel always/mention/observe/review/off` | Set channel activation mode |
-| `!channel agent <name/off>` | Set per-channel agent override; a Crew Bot's name runs the whole channel as that Bot |
+| `!channel agent <name/off>` | Set per-channel agent override; a Crew Bot's name runs the whole channel as that Bot, one session per thread |
+| `!channel bot <name/off>` | Owner only. One Bot answers every thread in this channel in its own chat, so all of it shows on the Bots page; each reply goes to the thread it answers. The Bot's chat must be open. While it answers one thread, a message in another thread is asked to wait. Replies typed in the Bot's chat on the dashboard also post to the last thread it answered |
+| `!channel conductor on/off` | Owner only. One Conductor chat answers every thread in this channel and sends work to workers, like a Conductor thread; each reply goes to the thread it answers, and only the owner's messages reach it. Needs Conductor threads on (and, in a public channel, the public-channel opt-in). `off` ends it; its chat stays on the dashboard |
+| `!channel status` | One line: who answers this channel now |
 | `!project <path>` / `!project off` | Set or clear the project whose `.kiro` agents `!ta` can find in this thread (does not change the working directory); bare `!project` shows it |
 | `!voice on/off` | Speak this thread's answers as well as typing them |
 | `!link-to-dashboard` | Import this thread's history into a dashboard session and link it |

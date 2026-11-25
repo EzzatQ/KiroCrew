@@ -366,6 +366,9 @@ class TestAntiDrift:
             # read from the verified caller session; no caller sets either.
             "owner_member_id",
             "owner_approval_mode",
+            # The gateway's MAC, written only by cron_service.approval_grant on
+            # save; no create or update path accepts it from a caller.
+            "approval_grant",
         }
     )
 

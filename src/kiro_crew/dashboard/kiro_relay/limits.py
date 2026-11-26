@@ -86,6 +86,10 @@ _LOCAL_CREDENTIAL_EXACT = frozenset(
         # Rotates a Crew refresh cookie into fresh Crew credentials. A relayed
         # caller is authenticated by the relay and never holds one.
         "/api/auth/refresh",
+        # Pairing a phone and trading its device token for a dashboard session mint
+        # long-lived credentials; a relayed caller never does either.
+        "/api/auth/device-session",
+        "/oauth/device_authorization",
         # Authenticated by the local secret (X-Local-Secret) for the CLI.
         "/api/logout",
         "/api/logout/link",

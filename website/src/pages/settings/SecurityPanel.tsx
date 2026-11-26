@@ -7,6 +7,7 @@
  * - `SecurityPanelApprovals.tsx`: Auto-approve
  * - `SecurityPanelDeniedCommands.tsx`: Denied commands
  * - `SecurityPanelTailnet.tsx`: Tailnet
+ * - `SecurityPanelDevices.tsx`: Devices
  * - `SecurityPanelTrust.tsx`: Third-party apps, Registry trust
  * - `SecurityPanelRedaction.tsx`: Redaction
  * - `SecurityPanelBodyFields.tsx`: Message body fields
@@ -19,7 +20,7 @@ import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ShieldCheck, EyeOff, Terminal, Layers, ExternalLink, Gavel, Gauge, Boxes, BookOpen,
-  Network, GitBranch, Mail, ShieldAlert,
+  Network, GitBranch, Mail, ShieldAlert, Smartphone,
 } from 'lucide-react'
 import { useAppSelector } from '../../store'
 import { SettingsSubNav } from '../../components/SettingsSubNav'
@@ -32,6 +33,7 @@ import { CODE_BASE, PostureSection } from './SecurityPanelPosture'
 import { type KirocrewCfgShape, YoloDurationCard } from './SecurityPanelApprovals'
 import { DeniedCommandsSection } from './SecurityPanelDeniedCommands'
 import { TAILNET_STATE_KEY, TailnetOriginCard } from './SecurityPanelTailnet'
+import { DevicesCard } from './SecurityPanelDevices'
 import { ThirdPartyAppsCard, TrustedRegistriesCard } from './SecurityPanelTrust'
 import { RedactionSection } from './SecurityPanelRedaction'
 import { BodyFieldsSection } from './SecurityPanelBodyFields'
@@ -74,7 +76,7 @@ function DocsSection() {
  * The rail states which is which before any row is read, and the two large
  * tables (137 rules, ~20 governed scopes) get a pane instead of a fold.
  */
-type SecuritySectionKey = 'posture' | 'approval' | 'rules' | 'tailnet' | 'apps' | 'registries' | 'redaction' | 'bodyFields' | 'safety' | 'layers' | 'governance' | 'docs'
+type SecuritySectionKey = 'posture' | 'approval' | 'rules' | 'tailnet' | 'devices' | 'apps' | 'registries' | 'redaction' | 'bodyFields' | 'safety' | 'layers' | 'governance' | 'docs'
 type SecuritySectionGroup = 'status' | 'yours' | 'enforced' | 'reference'
 
 interface SecuritySectionDef {
@@ -107,6 +109,7 @@ export const SECTION_LABEL_KEY: Record<SecuritySectionKey, string> = {
   approval: 'pages.settings.securityPanel.yolo_auto_approve',
   rules: 'pages.settings.securityPanel.denied_commands',
   tailnet: 'pages.settings.securityPanel.tailnet_section',
+  devices: 'pages.settings.securityPanel.devices.section_title',
   apps: 'pages.settings.securityPanel.third_party_apps_section',
   registries: 'pages.settings.securityPanel.trustedRegistries.section_title_rail',
   redaction: 'pages.settings.securityPanel.redaction_section',
@@ -132,6 +135,7 @@ const SECURITY_SECTIONS: readonly SecuritySectionDef[] = [
   { key: 'approval', icon: <Gauge size={15} />, group: 'yours' },
   { key: 'rules', icon: <Terminal size={15} />, group: 'yours' },
   { key: 'tailnet', icon: <Network size={15} />, group: 'yours' },
+  { key: 'devices', icon: <Smartphone size={15} />, group: 'yours' },
   { key: 'apps', icon: <Boxes size={15} />, group: 'yours' },
   { key: 'registries', icon: <GitBranch size={15} />, group: 'yours' },
   { key: 'redaction', icon: <EyeOff size={15} />, group: 'yours' },
@@ -305,6 +309,11 @@ export function SecurityPanel({ basePath }: { basePath?: string } = {}) {
             {key === 'tailnet' && (
               <SettingsSection title={i18nT('pages.settings.securityPanel.tailnet_section')}>
                 <TailnetOriginCard />
+              </SettingsSection>
+            )}
+            {key === 'devices' && (
+              <SettingsSection title={i18nT('pages.settings.securityPanel.devices.section_title')}>
+                <DevicesCard />
               </SettingsSection>
             )}
             {key === 'apps' && (

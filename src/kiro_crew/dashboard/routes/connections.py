@@ -23,6 +23,7 @@ from kiro_crew.dashboard import (
     handlers_project,
 )
 from kiro_crew.dashboard.handlers import external_terminal
+from kiro_crew.dashboard.handlers.auth_device_session import api_auth_device_session
 from kiro_crew.dashboard.handlers.auth_mobile import api_auth_mobile_link
 from kiro_crew.dashboard.handlers.auth_refresh import (
     api_auth_logout,
@@ -112,6 +113,7 @@ def register(app: web.Application) -> None:
     # filter). Same auth floor as mobile-link's read half.
     app.router.add_get("/api/mobile-connect/methods", api_mobile_connect_methods)
     app.router.add_post("/api/auth/refresh", api_auth_refresh)
+    app.router.add_post("/api/auth/device-session", api_auth_device_session)
     app.router.add_post("/api/auth/logout", api_auth_logout)
 
     # Instances (multi-instance management) — owner-only, gated by instances.enabled

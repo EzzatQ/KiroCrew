@@ -96,6 +96,7 @@ describe('SecurityPanel — inspector rail', () => {
       expect.stringContaining('YOLO (auto-approve)'),
       expect.stringContaining('Denied Commands'),
       expect.stringContaining('Tailnet origin'),
+      expect.stringContaining('Devices'),
       expect.stringContaining('Third-party apps'),
       expect.stringContaining('Registry trust'),
       expect.stringContaining('Redaction'),

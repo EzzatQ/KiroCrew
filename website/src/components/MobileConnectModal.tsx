@@ -8,22 +8,16 @@ import { Btn } from './ui'
 import { settingsPath } from './settingsPath'
 import { useAppSelector } from '../store'
 import { copyToClipboard } from '../utils/clipboard'
-import { findReport, parseErrorCode } from '../utils/errorReport'
+import { findReport } from '../utils/errorReport'
+import { linkErrorCode, mintMobileLoginLink } from '../utils/mobileLoginLink'
 import ErrorBoundary from './ErrorBoundary'
 import ErrorNotice from './ErrorNotice'
 import { MobileConnectFrame } from './mobileConnect'
+import { PairPhonePanel } from './PairPhonePanel'
 import { getMobileConnectRenderers } from './mobileConnectRenderers'
 import { TailnetDirectLink, tailnetDirectActive } from './TailnetDirectLink'
 import { useSharedCrewCapabilities } from '../hooks/sharedCrew/useSharedCrew'
 import { sharedCrewPreviewOn } from '../api/sharedCrewUi'
-
-/** Machine-readable code from a mint error's JSON body (same shape as the
- *  Settings card's helper): lets the UI blame configuration only when the
- *  server actually said `external_origin_unavailable`. */
-const linkErrorCode = (error: unknown): string | undefined =>
-  typeof error === 'object' && error !== null && 'body' in error
-    ? parseErrorCode(typeof error.body === 'string' ? error.body : undefined)
-    : undefined
 
 /**
  * Handler error code → catalog key, for the SECOND consumer of
@@ -154,7 +148,21 @@ export function MobileConnectBody({ kinds, onClose }: { kinds: string[]; onClose
         {tokenSections}
       </details>
     ) : tokenSections}
+    <PairPhoneSection />
     </>
+  )
+}
+
+/** The waiting pairing requests and the code box, under the sign-in methods: a phone
+ *  that signed in by a plain link or the tailnet code (no one-scan pairing) shows its
+ *  code in the app, and the owner answers it here. Settings -> Security -> Devices
+ *  stays the full page. Absent when the owner routes refuse this session. */
+function PairPhoneSection() {
+  const { t } = useTranslation()
+  return (
+    <section className="border-t border-border mt-4 pt-3" data-testid="mobile-connect-pair">
+      <PairPhonePanel hideWhenUnavailable heading={t('components.mobileConnect.pair_a_phone')} />
+    </section>
   )
 }
 
@@ -336,7 +344,7 @@ function LoginLinkSection({ standalone, onClose }: { standalone: boolean; onClos
   // guard sees the REAL session, not the shared `dashboard:ui` default.
   const activeSlot = useAppSelector(s => s.chat.activeSlot)
   const sessionKey = activeSlot ? `dashboard:${activeSlot}` : undefined
-  const createLink = useMutation({ mutationFn: () => api.mobileLoginLink(sessionKey) })
+  const createLink = useMutation({ mutationFn: () => mintMobileLoginLink(sessionKey) })
   const [linkCopyFailed, setLinkCopyFailed] = useState(false)
   const showLinkQr = Boolean(createLink.data?.image)
 
@@ -412,6 +420,11 @@ function LoginLinkSection({ standalone, onClose }: { standalone: boolean; onClos
               'components.mobileConnect.could_not_create_a_link_try_again',
           )}
         />
+      )}
+      {createLink.data?.pair && (
+        <p className="text-[11.5px] text-muted mt-2" data-testid="mobile-connect-pair-note">
+          {t('components.mobileConnect.scan_once_to_sign_in_and_pair')}
+        </p>
       )}
       {createLink.data && (
         <p className="text-[11.5px] text-muted mt-2">

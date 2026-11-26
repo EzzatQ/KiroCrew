@@ -2,17 +2,12 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Copy, Smartphone } from 'lucide-react'
-import { api } from '../../api/client'
 import { Btn, Card, CardTitle, Input } from '../../components/ui'
 import ErrorNotice from '../../components/ErrorNotice'
 import { useAppSelector } from '../../store'
-import { findReport, parseErrorCode } from '../../utils/errorReport'
+import { findReport } from '../../utils/errorReport'
+import { linkErrorCode, mintMobileLoginLink } from '../../utils/mobileLoginLink'
 import { copyToClipboard } from '../../utils/clipboard'
-
-const mobileLinkErrorCode = (error: unknown): string | undefined =>
-  typeof error === 'object' && error !== null && 'body' in error
-    ? parseErrorCode(typeof error.body === 'string' ? error.body : undefined)
-    : undefined
 
 /**
  * Handler error code → catalog key, written out in full.
@@ -62,7 +57,7 @@ export function MobileLoginCard() {
   const sessionKey = activeSlot ? `dashboard:${activeSlot}` : undefined
 
   const createLink = useMutation({
-    mutationFn: () => api.mobileLoginLink(sessionKey),
+    mutationFn: () => mintMobileLoginLink(sessionKey),
     onMutate: () => {
       setCopied(false)
       setCopyFailed(false)
@@ -155,7 +150,7 @@ export function MobileLoginCard() {
           report={findReport(createLink.error?.message)}
           message={t(
             MOBILE_LINK_ERROR_KEYS[
-              mobileLinkErrorCode(createLink.error) as keyof typeof MOBILE_LINK_ERROR_KEYS
+              linkErrorCode(createLink.error) as keyof typeof MOBILE_LINK_ERROR_KEYS
             ] || 'pages.settings.mobileLoginCard.could_not_create_a_sign_in_link_try_again',
           )}
         />

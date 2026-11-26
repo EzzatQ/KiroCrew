@@ -19,6 +19,16 @@ Requests and grants are one JSON record under ``member-records/local-grants/``, 
 sandbox can read or write. Codes are stored as SHA-256 digests only, and no refresh token
 is stored at all.
 The access token is a JWT signed with a key derived from the gateway's own signing key.
+
+Device grants are a second class of grant, for a phone the owner pairs with the OAuth
+2.0 Device Authorization Grant (RFC 8628). A device asks with ``device_authorize``, the
+owner types its user code into the signed-in dashboard (``decide_device``), and the
+device polls ``exchange_device_code``. Its grant has the one scope ``dashboard``, refreshes
+for 90 days idle with no absolute cap, and its access token is accepted only by
+:meth:`LocalAuthorization.verify_device`, to open a dashboard session. ``verify`` never
+admits it, so a device credential is not a Crew API credential. The class is fixed by
+``DEVICE_CLIENTS``: a device client cannot use the authorization-code flow and no other
+client can pair as a device.
 """
 
 from __future__ import annotations
@@ -26,6 +36,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import re
 import secrets
 import threading
@@ -42,6 +53,8 @@ from kiro_crew.crew_teams import TEAM_MEMBERS_MAX
 from kiro_crew.dashboard.token_auth_tokens import _b64url_decode, _b64url_encode, _ct_eq
 from kiro_crew.members import MEMBER_NAME_MAX_CHARS, is_dispatchable_member_name
 from kiro_crew.sel import sel
+
+logger = logging.getLogger(__name__)
 
 #: The record kind under ``member-records/``; one of ``member_records.RECORD_KINDS``.
 LOCAL_GRANTS_KIND = "local-grants"
@@ -63,6 +76,18 @@ SCOPES: tuple[str, ...] = (
     "artifacts:write",
 )
 
+#: The one scope of a device grant. Not in :data:`SCOPES`, so ``authorize`` can never grant it.
+DEVICE_SCOPE = "dashboard"
+#: Clients that pair as devices, and no others. A client id is self-reported, so the
+#: class is a property of the client id here and of the stored grant everywhere else.
+DEVICE_CLIENTS = frozenset({"kirocrew-ios"})
+DEVICE_CLASS = "device"
+#: A device code starts with this; ``/oauth/revoke`` with one cancels its pairing request.
+DEVICE_CODE_PREFIX = "dc_"
+DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
+#: ``cls`` claim of a device access token.
+DEVICE_CLAIM = "cls"
+
 # Lifetimes and pending-request limits. All but the 5-minute access token are proposals to be confirmed
 # (the Crew API RFC, "Local authorization").
 REQUEST_TTL_SECS = 600
@@ -71,6 +96,24 @@ ACCESS_TTL_SECS = 300
 REFRESH_IDLE_SECS = 24 * 3600
 REFRESH_MAX_SECS = 7 * 24 * 3600
 POLL_INTERVAL_SECS = 2
+# Device pairing (RFC 8628).
+DEVICE_REQUEST_TTL_SECS = 300
+DEVICE_POLL_INTERVAL_SECS = 5
+#: RFC 8628 section 3.5: ``slow_down`` adds 5 seconds to the interval.
+DEVICE_SLOW_DOWN_STEP_SECS = 5
+DEVICE_REFRESH_IDLE_SECS = 90 * 24 * 3600
+#: A device grant has no absolute cap. The record prunes a grant by ``expires_at``, so
+#: it holds one that never comes; refresh stops at the idle limit instead.
+DEVICE_GRANT_SPAN_SECS = 10 * 365 * 24 * 3600
+#: A revoked device grant keeps refusing its refresh token for as long as one could work.
+DEVICE_REVOKED_KEEP_SECS = DEVICE_REFRESH_IDLE_SECS
+#: A device that lost the response to a refresh may present the token it just used once
+#: more inside this window and gets the same next token. An older token still revokes.
+DEVICE_ROTATION_GRACE_SECS = 30
+#: A dashboard cookie rotation writes the grant's last use at most this often.
+DEVICE_TOUCH_SECS = 10 * 60
+DEVICE_MAX_PENDING_PER_SOURCE = 3
+DEVICE_MAX_PENDING = 10
 MAX_PENDING_PER_CLIENT = 5
 MAX_PENDING = 20
 # The longest value of each field an app sends that is stored, echoed or audited.
@@ -100,12 +143,22 @@ _LOCK = threading.Lock()
 class AuthError(Exception):
     """A refusal in the OAuth error shape (RFC 6749 section 5.2)."""
 
-    def __init__(self, error: str, description: str, status: int = 400, retry_after: int = 0):
+    def __init__(
+        self,
+        error: str,
+        description: str,
+        status: int = 400,
+        retry_after: int = 0,
+        revoked_grant: str = "",
+    ):
         super().__init__(description)
         self.error = error
         self.description = description
         self.status = status
         self.retry_after = retry_after
+        #: The device grant this refusal revoked (reuse detection), so the route ends the
+        #: dashboard cookie chains it opened too. Empty for every other refusal.
+        self.revoked_grant = revoked_grant
 
 
 class UnknownRequest(Exception):
@@ -137,15 +190,36 @@ class LocalCredential:
         return scope in self.scopes
 
 
+@dataclass(frozen=True)
+class DeviceCredential:
+    """What a verified device access token says about its caller."""
+
+    grant_id: str
+    client_id: str
+    client_name: str
+
+
 def _digest(secret: str) -> str:
     return hashlib.sha256(secret.encode("utf-8", "surrogatepass")).hexdigest()
 
 
-def _revoke(grant: dict[str, Any]) -> None:
-    """Reduce *grant* to what keeps refusing it until its absolute expiry."""
+def _revoke(grant: dict[str, Any], now: float) -> None:
+    """Reduce *grant* to what keeps refusing it until its absolute expiry.
+
+    A device grant has no real absolute expiry, so its tombstone keeps refusing for as
+    long as a refresh token could still be live and then goes.
+    """
     expires_at = grant["expires_at"]
+    kind = grant.get("class")
     grant.clear()
+    if kind == DEVICE_CLASS:
+        expires_at = min(expires_at, now + DEVICE_REVOKED_KEEP_SECS)
+        grant["class"] = DEVICE_CLASS
     grant.update(status="revoked", expires_at=expires_at)
+
+
+def _is_device(grant: Mapping[str, Any]) -> bool:
+    return grant.get("class") == DEVICE_CLASS
 
 
 def _require_subject(caller: str) -> None:
@@ -224,6 +298,31 @@ def _request_for_owner(request_id: str, rec: Mapping[str, Any]) -> dict[str, Any
     return view
 
 
+def _grant_row(grant_id: str, grant: Mapping[str, Any]) -> dict[str, Any]:
+    """A live grant as :meth:`LocalAuthorization.grants` lists it, without a secret."""
+    row: dict[str, Any] = {
+        "grant_id": grant_id,
+        "namespace": grant["namespace"],
+        "client_id": grant["client_id"],
+        "client_name": grant["client_name"],
+        "scopes": list(grant["scopes"]),
+        # A grant recorded without the key may use no Bot.
+        "bots": _grant_bots(grant.get("bots", {}).get("ids", ())),
+        "status": grant["status"],
+        "created_at": int(grant["created_at"]),
+        "expires_at": int(grant["expires_at"]),
+    }
+    if _is_device(grant):
+        # A device grant has no absolute expiry; what ends it is the idle refresh limit.
+        row.update(
+            kind=DEVICE_CLASS,
+            expires_at=int(min(grant["refresh_expires_at"], grant["expires_at"])),
+            last_used_at=grant.get("last_used_at"),
+            last_ip=grant.get("last_ip", ""),
+        )
+    return row
+
+
 def _grant_bots(ids: Any) -> dict[str, Any]:
     """The Bots a grant may use, in the contract's ``GrantBots`` shape. A local grant's
     range is always the Bots the owner picked."""
@@ -271,12 +370,13 @@ class LocalAuthorization:
         try:
             raw = read_bytes_with_retry(self._path, max_bytes=_STATE_MAX_BYTES)
         except FileNotFoundError:
-            return {"requests": {}, "grants": {}}
+            return {"requests": {}, "grants": {}, "device_requests": {}}
         data = json.loads(raw.decode("utf-8"))
         if not (
             isinstance(data, dict)
             and isinstance(data.get("requests"), dict)
             and isinstance(data.get("grants"), dict)
+            and isinstance(data.setdefault("device_requests", {}), dict)
         ):
             raise ValueError("local authorization record is malformed")
         return data
@@ -286,6 +386,11 @@ class LocalAuthorization:
         state["grants"] = {gid: g for gid, g in state["grants"].items() if g["expires_at"] > now}
         state["requests"] = {
             rid: rec for rid, rec in state["requests"].items() if _kept(rec, state["grants"], now)
+        }
+        state["device_requests"] = {
+            rid: rec
+            for rid, rec in state.get("device_requests", {}).items()
+            if rec["expires_at"] > now
         }
         # Refuse growth rather than write a record the bounded reader cannot open. A
         # revocation only shrinks a grant, so it is never the write that is refused.
@@ -325,6 +430,8 @@ class LocalAuthorization:
         challenge = query.get("code_challenge", "")
         if not (0 < len(client_id) <= CLIENT_ID_MAX and _PRINTABLE_RE.match(client_id)):
             raise AuthError("invalid_request", "client_id is missing or malformed")
+        if client_id in DEVICE_CLIENTS:
+            raise AuthError("unauthorized_client", "this client pairs with the device flow only")
         if sent_name and not (len(sent_name) <= CLIENT_NAME_MAX and _PRINTABLE_RE.match(sent_name)):
             raise AuthError("invalid_request", "client_name is malformed")
         # The owner's view shows the full client_id next to this name.
@@ -464,20 +571,15 @@ class LocalAuthorization:
             and min(grant["refresh_expires_at"], grant["expires_at"]) > now
         ]
         return [
-            {
-                "grant_id": grant_id,
-                "namespace": grant["namespace"],
-                "client_id": grant["client_id"],
-                "client_name": grant["client_name"],
-                "scopes": list(grant["scopes"]),
-                # A grant recorded without the key may use no Bot.
-                "bots": _grant_bots(grant.get("bots", {}).get("ids", ())),
-                "status": grant["status"],
-                "created_at": int(grant["created_at"]),
-                "expires_at": int(grant["expires_at"]),
-            }
+            _grant_row(grant_id, grant)
             for grant_id, grant in sorted(live, key=lambda item: (item[1]["created_at"], item[0]))
         ]
+
+    def grant_class(self, grant_id: str) -> str:
+        """``"device"`` for a device grant, live or revoked, else ``""``."""
+        with _LOCK:
+            grant = self._load()["grants"].get(grant_id)
+        return DEVICE_CLASS if grant is not None and _is_device(grant) else ""
 
     def grant(self, grant_id: str) -> dict[str, Any] | None:
         """The grant *grant_id* as :meth:`grants` lists it, or ``None`` when it does
@@ -546,7 +648,7 @@ class LocalAuthorization:
                 return False
             if grant["status"] == "revoked":
                 return True
-            _revoke(grant)
+            _revoke(grant, now)
             serialized = self._encode(state, now)
             sel().log_api_access(
                 caller=caller,
@@ -584,7 +686,7 @@ class LocalAuthorization:
                 # A code used twice: whoever holds the tokens it gave may not be the app.
                 grant = state["grants"].get(rec.get("grant_id", ""))
                 if grant is not None:
-                    _revoke(grant)
+                    _revoke(grant, now)
                     self._save(state, now)
                 raise AuthError("invalid_grant", "the authorization code was already used")
             if rec["code_expires_at"] <= now:
@@ -616,20 +718,50 @@ class LocalAuthorization:
             return self._issue(state, grant_id, grant, grant["scopes"], issuer, now)
 
     def refresh(
-        self, client_id: str, refresh_token: str, scope: str, issuer: str
+        self,
+        client_id: str,
+        refresh_token: str,
+        scope: str,
+        issuer: str,
+        *,
+        remote: bool = False,
+        source: str = "",
     ) -> dict[str, Any]:
+        """Rotate a refresh token. *remote* says the caller is not on this machine, which
+        only a device grant may be: the class is read from the stored grant, never from
+        *client_id*. *source* is the caller's address for a device grant's ``last_ip``."""
         if max(map(len, (client_id, refresh_token, scope))) > PRESENTED_MAX:
             raise AuthError("invalid_request", "a field is too long")
         now = self._clock()
         parts = self._refresh_parts(refresh_token)
+        revoked_device = ""
         with _LOCK:
             state = self._load()
             grant = state["grants"].get(parts[0]) if parts else None
             if parts is not None and grant is not None and grant["status"] == "active":
                 grant_id, rotation = parts
+                device = _is_device(grant)
+                if remote and not device:
+                    raise AuthError(
+                        "invalid_grant", "the refresh token is wrong, used, expired or revoked"
+                    )
+                if (
+                    device
+                    and rotation == grant["refresh_n"] - 1
+                    and grant["client_id"] == client_id
+                    and now - grant.get("last_rotated_at", -DEVICE_ROTATION_GRACE_SECS - 1)
+                    <= DEVICE_ROTATION_GRACE_SECS
+                    and min(grant["refresh_expires_at"], grant["expires_at"]) > now
+                ):
+                    # The answer to the last rotation may have been lost: the same next
+                    # token again, not a new rotation.
+                    grant["last_used_at"] = int(now)
+                    grant["last_ip"] = source
+                    return self._issue(state, grant_id, grant, grant["scopes"], issuer, now)
                 if rotation < grant["refresh_n"]:
                     # A rotated-out token came back: treat the grant as stolen.
-                    _revoke(grant)
+                    revoked_device = grant_id if device else ""
+                    _revoke(grant, now)
                     self._save(state, now)
                 elif (
                     rotation == grant["refresh_n"]
@@ -644,8 +776,15 @@ class LocalAuthorization:
                     ):
                         raise AuthError("invalid_scope", "scope can only narrow the grant")
                     grant["refresh_n"] = rotation + 1
+                    grant["last_rotated_at"] = now
+                    grant["last_used_at"] = int(now)
+                    grant["last_ip"] = source
                     return self._issue(state, grant_id, grant, scopes, issuer, now)
-        raise AuthError("invalid_grant", "the refresh token is wrong, used, expired or revoked")
+        raise AuthError(
+            "invalid_grant",
+            "the refresh token is wrong, used, expired or revoked",
+            revoked_grant=revoked_device,
+        )
 
     def _issue(
         self,
@@ -657,7 +796,10 @@ class LocalAuthorization:
         now: float,
     ) -> dict[str, Any]:
         refresh_token = self._refresh_token(grant_id, grant["refresh_n"])
-        grant["refresh_expires_at"] = now + REFRESH_IDLE_SECS
+        device = _is_device(grant)
+        grant["refresh_expires_at"] = now + (
+            DEVICE_REFRESH_IDLE_SECS if device else REFRESH_IDLE_SECS
+        )
         self._save(state, now)
         claims = {
             "iss": issuer,
@@ -668,6 +810,8 @@ class LocalAuthorization:
             "exp": int(now) + ACCESS_TTL_SECS,
             "jti": secrets.token_urlsafe(8),
         }
+        if device:
+            claims[DEVICE_CLAIM] = DEVICE_CLASS
         head = _b64url_encode(json.dumps({"alg": "HS256", "typ": TOKEN_TYP}).encode())
         body = _b64url_encode(json.dumps(claims, separators=(",", ":")).encode())
         return {
@@ -685,8 +829,19 @@ class LocalAuthorization:
 
         An unknown token changes nothing.
         """
+        return self.revoke_presented(token, remote=False)[0]
+
+    def revoke_presented(self, token: str, *, remote: bool) -> tuple[bool, str]:
+        """:meth:`revoke_token` that also names the device grant the token belongs to, ended
+        now or earlier, as ``(ended, device grant id)``, so the route can end the dashboard
+        sessions that grant opened. *remote* says the caller is not on this machine: it may
+        revoke a device grant only, and anything else is a 404."""
         if len(token) > PRESENTED_MAX:
-            return False
+            return False, ""
+        if token.startswith(DEVICE_CODE_PREFIX):
+            # A device gives up the pairing request its own code names (RFC 7009 reuse):
+            # it was never a grant, so there is nothing to revoke and nothing to end.
+            return self._cancel_device_code(token), ""
         parts = self._refresh_parts(token)
         claims = None if parts else self._claims(token)
         grant_id = parts[0] if parts else str(claims.get("grant_id")) if claims else ""
@@ -694,13 +849,338 @@ class LocalAuthorization:
         with _LOCK:
             state = self._load()
             grant = state["grants"].get(grant_id)
+            device = grant is not None and _is_device(grant)
+            if remote and not device:
+                raise AuthError("not_found", "local authorization is only served on loopback", 404)
             if grant is None or grant["status"] != "active":
-                return False
+                return False, grant_id if device else ""
             if parts is None or parts[1] <= grant["refresh_n"]:
-                _revoke(grant)
+                _revoke(grant, now)
                 self._save(state, now)
-                return True
-            return False
+                return True, grant_id if device else ""
+            return False, ""
+
+    # ── devices (RFC 8628) ────────────────────────────────────────────
+
+    def device_authorize(self, client_id: str, client_name: str, *, source: str) -> dict[str, Any]:
+        """Record a pairing request for a device and answer RFC 8628 section 3.2.
+
+        *source* is the caller's address, or ``""`` behind a tunnel; the caps count by it.
+        Raises :class:`AuthError` for a client that is not a device client or a malformed
+        name, and ``temporarily_unavailable`` when too many requests wait.
+        """
+        if client_id not in DEVICE_CLIENTS:
+            raise AuthError("unauthorized_client", "this client cannot pair as a device")
+        if client_name and not (
+            len(client_name) <= CLIENT_NAME_MAX and _PRINTABLE_RE.match(client_name)
+        ):
+            raise AuthError("invalid_request", "client_name is malformed")
+        now = self._clock()
+        with _LOCK:
+            state = self._load()
+            requests = state["device_requests"]
+            waiting = [
+                r for r in requests.values() if r["status"] == "pending" and r["expires_at"] > now
+            ]
+            if len(waiting) >= DEVICE_MAX_PENDING or (
+                sum(1 for r in waiting if r["source"] == source) >= DEVICE_MAX_PENDING_PER_SOURCE
+            ):
+                raise AuthError(
+                    "temporarily_unavailable", "too many pairing requests are waiting", 503, 60
+                )
+            taken = {r["user_code"] for r in waiting}
+            user_code = ""
+            while not user_code or user_code in taken:
+                code = "".join(secrets.choice(_USER_CODE_ALPHABET) for _ in range(8))
+                user_code = f"{code[:4]}-{code[4:]}"
+            device_code = DEVICE_CODE_PREFIX + secrets.token_urlsafe(32)
+            requests["dreq_" + secrets.token_urlsafe(12)] = {
+                "client_id": client_id,
+                "client_name": client_name or client_id[:CLIENT_NAME_MAX],
+                "user_code": user_code,
+                "device_hash": _digest(device_code),
+                "status": "pending",
+                "source": source,
+                "created_at": now,
+                "expires_at": now + DEVICE_REQUEST_TTL_SECS,
+                "interval": DEVICE_POLL_INTERVAL_SECS,
+            }
+            self._save(state, now)
+        return {
+            "device_code": device_code,
+            "user_code": user_code,
+            "expires_in": DEVICE_REQUEST_TTL_SECS,
+            "interval": DEVICE_POLL_INTERVAL_SECS,
+        }
+
+    def _waiting_device_request(
+        self, state: Mapping[str, Any], user_code: str, now: float
+    ) -> tuple[str, dict[str, Any]] | None:
+        """The pending, unexpired pairing request that shows *user_code*, or ``None``.
+        Case and the dash do not matter; the compare is constant-time."""
+        presented = user_code.strip().upper() if isinstance(user_code, str) else ""
+        if len(presented) == 8 and "-" not in presented:
+            presented = f"{presented[:4]}-{presented[4:]}"
+        return next(
+            (
+                (rid, rec)
+                for rid, rec in state["device_requests"].items()
+                if rec["status"] == "pending"
+                and rec["expires_at"] > now
+                and _ct_eq(rec["user_code"], presented)
+            ),
+            None,
+        )
+
+    def _audit_unknown_code(self, caller: str, operation: str) -> None:
+        """A refused lookup or answer leaves a row: a guessing run shows up. Fixed labels
+        only, never the code the caller typed. A failed write does not change the answer."""
+        try:
+            sel().log_api_access(
+                caller=caller,
+                operation=operation,
+                outcome="unknown_code",
+                source="local-authorization",
+                resources="device_request=none",
+            )
+        except Exception:
+            logger.warning("Device approval audit failed")
+
+    def device_request_for_owner(self, user_code: str, *, caller: str) -> dict[str, Any]:
+        """What the owner sees before answering the request that shows *user_code*. Changes
+        nothing. An unknown, expired or answered code is one :class:`UnknownRequest`."""
+        _require_subject(caller)
+        now = self._clock()
+        with _LOCK:
+            found = self._waiting_device_request(self._load(), user_code, now)
+        if found is None:
+            self._audit_unknown_code(caller, "local_auth.device_lookup")
+            raise UnknownRequest("device request")
+        rec = found[1]
+        return {
+            "client_id": rec["client_id"],
+            "client_name": rec["client_name"],
+            "source": rec["source"],
+            "created_at": int(rec["created_at"]),
+            "expires_at": int(rec["expires_at"]),
+            "expires_in": max(0, int(rec["expires_at"] - now)),
+            "age": max(0, int(now - rec["created_at"])),
+        }
+
+    def decide_device(self, user_code: str, approve: bool, *, caller: str) -> dict[str, Any]:
+        """The owner answers the pairing request that shows *user_code*, audited under
+        *caller*. An unknown, expired or already answered code is one and the same
+        :class:`UnknownRequest`, so the answer does not say which."""
+        _require_subject(caller)
+        now = self._clock()
+        with _LOCK:
+            state = self._load()
+            found = self._waiting_device_request(state, user_code, now)
+            if found is None:
+                self._audit_unknown_code(caller, "local_auth.device_decide")
+                raise UnknownRequest("device request")
+            request_id, rec = found
+            rec["status"] = "approved" if approve else "denied"
+            rec["decided_at"] = int(now)
+            serialized = self._encode(state, now)
+            sel().log_api_access(
+                caller=caller,
+                operation="local_auth.device_decide",
+                outcome="approved" if approve else "denied",
+                source="local-authorization",
+                resources=f"device_request={request_id}",
+                critical=True,
+            )
+            self._write(serialized)
+            return {
+                "status": rec["status"],
+                "client_id": rec["client_id"],
+                "client_name": rec["client_name"],
+                "source": rec["source"],
+                "created_at": int(rec["created_at"]),
+                "expires_at": int(rec["expires_at"]),
+            }
+
+    def _cancel_device_code(self, device_code: str) -> bool:
+        """Drop the waiting or approved-but-unredeemed pairing request that *device_code*
+        names, so its poll answers ``invalid_grant`` and the owner's list loses it. An
+        unknown code, an issued one or an expired one changes nothing."""
+        presented = _digest(device_code)
+        now = self._clock()
+        with _LOCK:
+            state = self._load()
+            for request_id, rec in state["device_requests"].items():
+                if (
+                    rec["status"] in ("pending", "approved")
+                    and rec["expires_at"] > now
+                    and _ct_eq(rec["device_hash"], presented)
+                ):
+                    del state["device_requests"][request_id]
+                    self._save(state, now)
+                    return True
+        return False
+
+    def pending_device_requests(self, *, caller: str) -> list[dict[str, Any]]:
+        """The pairing requests waiting for the owner, oldest first, each with what the
+        owner needs to answer it. Changes nothing."""
+        _require_subject(caller)
+        now = self._clock()
+        with _LOCK:
+            waiting = [
+                rec
+                for rec in self._load()["device_requests"].values()
+                if rec["status"] == "pending" and rec["expires_at"] > now
+            ]
+        waiting.sort(key=lambda rec: rec["created_at"])
+        return [
+            {
+                "user_code": rec["user_code"],
+                "client_id": rec["client_id"],
+                "client_name": rec["client_name"],
+                "source": rec["source"],
+                "created_at": int(rec["created_at"]),
+                "expires_at": int(rec["expires_at"]),
+                "expires_in": max(0, int(rec["expires_at"] - now)),
+                "age": max(0, int(now - rec["created_at"])),
+            }
+            for rec in waiting
+        ]
+
+    def touch_device_session(self, grant_id: str) -> bool:
+        """Whether the dashboard cookie chain of device grant *grant_id* may rotate now.
+
+        ``True`` for a family that is not a device grant's id. For a device grant it must
+        be active, inside its absolute span and not idle past the refresh limit; a missing
+        grant refuses too (fail closed). A rotation counts as use: ``last_used_at`` and
+        the idle limit move forward, written at most once per ``DEVICE_TOUCH_SECS``.
+        """
+        if not grant_id.startswith("grt_"):
+            return True
+        now = self._clock()
+        with _LOCK:
+            state = self._load()
+            grant = state["grants"].get(grant_id)
+            if grant is None or not _is_device(grant):
+                return False
+            if (
+                grant["status"] != "active"
+                or grant["expires_at"] <= now
+                or grant.get("refresh_expires_at", 0) <= now
+            ):
+                return False
+            if now - grant.get("last_used_at", 0) >= DEVICE_TOUCH_SECS:
+                grant["last_used_at"] = int(now)
+                grant["refresh_expires_at"] = now + DEVICE_REFRESH_IDLE_SECS
+                self._save(state, now)
+        return True
+
+    def exchange_device_code(
+        self, client_id: str, device_code: str, issuer: str, *, source: str
+    ) -> dict[str, Any]:
+        """Poll a pairing request (RFC 8628 section 3.4). Answers the tokens once the owner
+        approved it; raises ``authorization_pending``, ``slow_down`` (the interval grows
+        by 5 seconds), ``access_denied``, ``expired_token`` or ``invalid_grant``."""
+        if max(map(len, (client_id, device_code))) > PRESENTED_MAX:
+            raise AuthError("invalid_request", "a field is too long")
+        now = self._clock()
+        presented = _digest(device_code)
+        with _LOCK:
+            state = self._load()
+            rec = next(
+                (
+                    r
+                    for r in state["device_requests"].values()
+                    if _ct_eq(r["device_hash"], presented)
+                ),
+                None,
+            )
+            if rec is None or rec["client_id"] != client_id:
+                raise AuthError("invalid_grant", "the device code is wrong or expired")
+            if rec["status"] == "issued":
+                # A code redeemed twice: whoever holds the tokens it gave may not be the device.
+                grant = state["grants"].get(rec["grant_id"])
+                revoked_device = ""
+                if grant is not None and grant["status"] == "active":
+                    _revoke(grant, now)
+                    self._save(state, now)
+                if grant is not None and _is_device(grant):
+                    # Also when it was revoked already: a repeat finishes a failed cookie revoke.
+                    revoked_device = rec["grant_id"]
+                raise AuthError(
+                    "invalid_grant",
+                    "the device code was already used",
+                    revoked_grant=revoked_device,
+                )
+            if rec["expires_at"] <= now:
+                raise AuthError("expired_token", "the device code expired")
+            polled_at = rec.get("polled_at")
+            rec["polled_at"] = now
+            if polled_at is not None and now - polled_at < rec["interval"]:
+                rec["interval"] += DEVICE_SLOW_DOWN_STEP_SECS
+                self._save(state, now)
+                raise AuthError(
+                    "slow_down",
+                    f"poll every {rec['interval']} seconds",
+                    400,
+                    rec["interval"],
+                )
+            if rec["status"] == "pending":
+                self._save(state, now)
+                raise AuthError("authorization_pending", "the owner has not answered yet")
+            if rec["status"] == "denied":
+                self._save(state, now)
+                raise AuthError("access_denied", "the owner denied the request")
+            grant_id = "grt_" + secrets.token_urlsafe(12)
+            grant = {
+                "class": DEVICE_CLASS,
+                "namespace": NAMESPACE,
+                "client_id": client_id,
+                "client_name": rec["client_name"],
+                "scopes": [DEVICE_SCOPE],
+                "bots": _grant_bots(()),
+                "status": "active",
+                "created_at": now,
+                "expires_at": now + DEVICE_GRANT_SPAN_SECS,
+                "refresh_n": 0,
+                "last_used_at": int(now),
+                "last_ip": source,
+            }
+            state["grants"][grant_id] = grant
+            rec.update(status="issued", grant_id=grant_id)
+            return self._issue(state, grant_id, grant, grant["scopes"], issuer, now)
+
+    def verify_device(self, access_token: str) -> DeviceCredential | None:
+        """Who a device access token speaks for, or ``None``: forged, expired, not a device
+        token, or its grant is revoked, expired or missing. The only check that admits one."""
+        claims = self._claims(access_token)
+        now = self._clock()
+        if (
+            claims is None
+            or not isinstance(claims.get("exp"), int)
+            or claims["exp"] <= now
+            or claims.get(DEVICE_CLAIM) != DEVICE_CLASS
+            or DEVICE_SCOPE not in str(claims.get("scope", "")).split()
+        ):
+            return None
+        try:
+            with _LOCK:
+                grant = self._load()["grants"].get(str(claims.get("grant_id")))
+            if (
+                grant is None
+                or grant["status"] != "active"
+                or not _is_device(grant)
+                or grant["expires_at"] <= now
+                or grant["client_id"] != claims.get("client_id")
+                or DEVICE_SCOPE not in grant["scopes"]
+            ):
+                return None
+            return DeviceCredential(
+                grant_id=str(claims["grant_id"]),
+                client_id=str(grant["client_id"]),
+                client_name=str(grant["client_name"]),
+            )
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
 
     # ── the check a route runs ────────────────────────────────────────
 
@@ -751,6 +1231,8 @@ class LocalAuthorization:
                 or grant["status"] != "active"
                 or grant["expires_at"] <= now
                 or grant["client_id"] != claims.get("client_id")
+                or _is_device(grant)
+                or claims.get(DEVICE_CLAIM) == DEVICE_CLASS
             ):
                 return None
             return LocalCredential(
@@ -802,11 +1284,16 @@ def gateway_local_authorization() -> LocalAuthorization:
 
 
 __all__ = [
+    "DEVICE_CLASS",
+    "DEVICE_CLIENTS",
+    "DEVICE_GRANT_TYPE",
+    "DEVICE_SCOPE",
     "LOCAL_GRANTS_KIND",
     "NAMESPACE",
     "SCOPES",
     "AuthError",
     "BotsNotRequested",
+    "DeviceCredential",
     "LocalAuthorization",
     "LocalCredential",
     "RequestAlreadyAnswered",

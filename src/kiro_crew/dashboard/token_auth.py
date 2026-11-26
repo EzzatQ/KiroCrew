@@ -29,6 +29,9 @@ from kiro_crew.dashboard import tailnet_owner
 from kiro_crew.dashboard.agent_ipc import GRANT_KEY as AGENT_IPC_GRANT_KEY
 from kiro_crew.dashboard.agent_ipc import Binding as AgentIpcBinding
 from kiro_crew.dashboard.agent_ipc import agent_socket_gate, request_on_agent_socket
+from kiro_crew.dashboard.device_pair_claim import PAIR_CLAIM
+from kiro_crew.dashboard.device_pair_claim import claims as pair_claims
+from kiro_crew.dashboard.device_pair_claim import source_of as pair_source
 from kiro_crew.dashboard.kiro_relay.admission import admit_relay_caller
 from kiro_crew.dashboard.kiro_relay.caller import published_relay_caller
 from kiro_crew.dashboard.origin import (
@@ -152,6 +155,30 @@ async def _strict_cookie_refusal(request: web.Request, path: str) -> web.Respons
     except Exception:  # no owner to compare against: refuse
         logger.debug("strict-path owner check failed for %s", path, exc_info=True)
         return _deny(request, "Forbidden")
+
+
+_BOOTSTRAP_OWNER_SUBJECTS = frozenset({"local-app", "local-startup"})
+
+
+def _owner_subject(request: web.Request, user: str, app: str, token: str) -> str:
+    """The subject a validated dashboard token acts as.
+
+    A bootstrap subject (``local-app`` / ``local-startup``) frozen into a token
+    before the gateway had an ``owner_id`` is the same local owner that
+    ``/api/token/local`` signed in. When the token carries the signed
+    ``owner_mint`` claim and an owner is now configured, it acts as that owner.
+    Nothing else changes: app tokens, tokens without the claim and every other
+    subject keep what they carry, and no owner configured keeps the old rule.
+    """
+    if app or user not in _BOOTSTRAP_OWNER_SUBJECTS:
+        return user
+    from kiro_crew.dashboard.token_auth_tokens import token_owner_minted_unverified as owner_minted
+
+    state = request.app.get("state")
+    owner_id = str(getattr(state, "owner_id", "") or "")
+    if owner_id and isinstance(token, str) and owner_minted(token):
+        return owner_id
+    return user
 
 
 def token_auth_middleware(
@@ -811,7 +838,7 @@ def token_auth_middleware(
                 _log_auth(request, _audit_uid(_uid), "denied", _pin_mismatch)
                 return _deny(request, _pin_mismatch)
             # Expose identity so downstream handlers (and app-scope) see it.
-            request["user"] = _uid
+            request["user"] = _owner_subject(request, _uid, _app, _tok)
             request["app"] = _app
             # The credential actually validated (see the main path's note).
             request["auth_token"] = _tok
@@ -937,7 +964,7 @@ def token_auth_middleware(
                     return _deny(request, _pin_mismatch)
                 # Expose identity + confine app tokens to their declared scope
                 # (same rationale as the loopback branch above).
-                request["user"] = _uid
+                request["user"] = _owner_subject(request, _uid, _app, _tok)
                 request["app"] = _app
                 # The credential actually validated (see the main path's note).
                 request["auth_token"] = _tok
@@ -1171,6 +1198,7 @@ def token_auth_middleware(
             _embed_forward_port = ""
             _no_refresh = False
             _owner_minted = False
+            _pair_once = False
             _session_peer_key = ""
             _family = ""
             _ancestors = ""
@@ -1179,6 +1207,7 @@ def token_auth_middleware(
                 data = json.loads(payload_bytes)
                 session_exp = float(data.get("session_exp", 0.0))
                 _owner_minted = str(data.get(OWNER_MINT_CLAIM, "")) == "1"
+                _pair_once = str(data.get(PAIR_CLAIM, "")) == "1"
                 _link_nonce = str(data.get("nonce", ""))
                 # The credential family: this link, the session it becomes and its
                 # refresh chain end together (``revoke_token_family``), and so
@@ -1276,6 +1305,12 @@ def token_auth_middleware(
                 # again (see OWNER_MINT_CLAIM). Relabels a denial only.
                 if _owner_minted:
                     _carried[OWNER_MINT_CLAIM] = "1"
+                if _pair_once and _family:
+                    # The owner asked for this link to pair a phone. The session keeps
+                    # the claim; where and when the link was first redeemed is kept
+                    # server side, and only the exchange sets either.
+                    _carried[PAIR_CLAIM] = "1"
+                    pair_claims.redeemed(_family, pair_source(request))
                 if _family:
                     _carried[FAMILY_CLAIM] = _family
                 if _ancestors:
@@ -1367,7 +1402,7 @@ def token_auth_middleware(
                 )
 
         # Expose authenticated identity to handlers (deny-by-default)
-        request["user"] = user_id
+        request["user"] = _owner_subject(request, user_id, app_name, session_token)
         request["app"] = app_name
         # The credential this request was ACTUALLY authenticated with. Handlers
         # that read signed claims out of the caller's own token (the mobile-link
@@ -1661,7 +1696,9 @@ if TYPE_CHECKING:  # every owner-defined name in _EXPORTS, for type checkers and
         CONNECTOR_CONNECT_PATH,
         CREW_OAUTH_CALLBACK_PATH,
         CSRF_EXEMPT_EXACT_METHODS,
+        DEVICE_SESSION_PATH,
         LOCAL_AUTH_AUTHORIZE_PATH,
+        LOCAL_AUTH_DEVICE_PATH,
         LOCAL_AUTH_METADATA_PATH,
         LOCAL_AUTH_REVOKE_PATH,
         LOCAL_AUTH_TOKEN_PATH,
@@ -1713,6 +1750,7 @@ if TYPE_CHECKING:  # every owner-defined name in _EXPORTS, for type checkers and
         revoke_access_cookie,
         revoke_all_sessions,
         revoke_all_sessions_async,
+        revoke_family_id,
         revoke_token_family,
         token_embed_parent_port,
         token_owner_minted_unverified,

@@ -179,6 +179,72 @@
         }
       }
     },
+    "/v1/crew/owner/device-approvals": {
+      "get": {
+        "operationId": "get_v1_crew_owner_device_approvals",
+        "summary": "Look up a device pairing request by its user code before answering, or list the waiting ones",
+        "x-crew-tier": "owner",
+        "parameters": [
+          {"$ref": "#/components/parameters/CrewApiVersion"},
+          {"$ref": "#/components/parameters/RequestId"},
+          {"name": "user_code", "in": "query", "required": false, "schema": {"type": "string", "maxLength": 32}}
+        ],
+        "responses": {
+          "200": {
+            "description": "Who is asking, or with no user_code the waiting requests",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"},
+              "Crew-API-Version": {"$ref": "#/components/headers/Crew-API-Version"}
+            },
+            "content": {
+              "application/json": {"schema": {"oneOf": [
+                {"$ref": "#/components/schemas/DeviceRequest"},
+                {"$ref": "#/components/schemas/DeviceRequestList"}
+              ]}}
+            }
+          },
+          "400": {"$ref": "#/components/responses/Error"},
+          "401": {"$ref": "#/components/responses/Error"},
+          "403": {"$ref": "#/components/responses/Error"},
+          "404": {"$ref": "#/components/responses/Error"},
+          "429": {"$ref": "#/components/responses/Error"},
+          "503": {"$ref": "#/components/responses/Error"}
+        }
+      },
+      "post": {
+        "operationId": "post_v1_crew_owner_device_approvals",
+        "summary": "Approve or deny a device pairing request by its user code",
+        "x-crew-tier": "owner",
+        "parameters": [
+          {"$ref": "#/components/parameters/CrewApiVersion"},
+          {"$ref": "#/components/parameters/RequestId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {"schema": {"$ref": "#/components/schemas/DeviceApprovalRequest"}}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The pairing request after the answer",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"},
+              "Crew-API-Version": {"$ref": "#/components/headers/Crew-API-Version"}
+            },
+            "content": {
+              "application/json": {"schema": {"$ref": "#/components/schemas/DeviceApproval"}}
+            }
+          },
+          "400": {"$ref": "#/components/responses/Error"},
+          "401": {"$ref": "#/components/responses/Error"},
+          "403": {"$ref": "#/components/responses/Error"},
+          "404": {"$ref": "#/components/responses/Error"},
+          "429": {"$ref": "#/components/responses/Error"},
+          "503": {"$ref": "#/components/responses/Error"}
+        }
+      }
+    },
     "/v1/crew/owner/approvals": {
       "get": {
         "operationId": "get_v1_crew_owner_approvals",
@@ -368,7 +434,9 @@
         "properties": {
           "id": {"type": "string", "pattern": "^grt_"},
           "object": {"const": "grant"},
-          "kind": {"const": "local", "description": "Made through local authorization, by this gateway"},
+          "kind": {"enum": ["local", "device"], "description": "Made through local authorization, by this gateway. device: a phone paired with the device flow."},
+          "last_used_at": {"type": ["integer", "null"], "description": "A device grant only: when it last refreshed, in Unix seconds"},
+          "last_ip": {"type": "string", "description": "A device grant only: the address of its last refresh, empty when a tunnel hides it"},
           "namespace": {"const": "default", "description": "Stored on every record; one fixed value today"},
           "client_id": {"type": "string", "maxLength": 128, "description": "As the app reported it"},
           "app": {
@@ -391,7 +459,60 @@
           },
           "status": {"const": "active", "description": "A revoked grant is not listed"},
           "created_at": {"type": "integer"},
-          "expires_at": {"type": "integer", "description": "The latest the grant can last; it ends earlier when its refresh token runs out unused"}
+          "expires_at": {"type": "integer", "description": "The latest the grant can last; it ends earlier when its refresh token runs out unused. A device grant has no absolute limit, so this is when its refresh runs out if it is not used again."}
+        }
+      },
+      "DeviceApprovalRequest": {
+        "type": "object",
+        "required": ["user_code"],
+        "additionalProperties": false,
+        "properties": {
+          "user_code": {"type": "string", "maxLength": 32, "description": "The code the device shows, as XXXX-XXXX; case and the dash are not significant"},
+          "approve": {"type": "boolean", "default": true, "description": "false denies the request"}
+        }
+      },
+      "DeviceRequest": {
+        "type": "object",
+        "required": ["object", "client_id", "device_name", "verified", "source_ip", "via_tunnel", "created_at", "expires_at", "age", "expires_in"],
+        "properties": {
+          "object": {"const": "device_request"},
+          "client_id": {"type": "string"},
+          "device_name": {"type": "string", "maxLength": 80, "description": "As the device reported it"},
+          "verified": {"const": false},
+          "source_ip": {"type": "string", "description": "Where the request came from, empty behind a tunnel"},
+          "via_tunnel": {"type": "boolean"},
+          "created_at": {"type": "integer"},
+          "expires_at": {"type": "integer"},
+          "age": {"type": "integer"},
+          "expires_in": {"type": "integer"}
+        }
+      },
+      "DeviceRequestList": {
+        "type": "object",
+        "required": ["object", "data", "first_id", "last_id", "has_more"],
+        "properties": {
+          "object": {"const": "list"},
+          "data": {"type": "array", "items": {"allOf": [
+            {"$ref": "#/components/schemas/DeviceRequest"},
+            {"type": "object", "required": ["user_code"], "properties": {"user_code": {"type": "string"}}}
+          ]}},
+          "first_id": {"type": ["string", "null"]},
+          "last_id": {"type": ["string", "null"]},
+          "has_more": {"const": false}
+        }
+      },
+      "DeviceApproval": {
+        "type": "object",
+        "required": ["object", "status", "client_id", "device_name", "verified", "source_ip", "created_at", "expires_at"],
+        "properties": {
+          "object": {"const": "device_approval"},
+          "status": {"enum": ["approved", "denied"]},
+          "client_id": {"type": "string"},
+          "device_name": {"type": "string", "maxLength": 80, "description": "As the device reported it"},
+          "verified": {"const": false},
+          "source_ip": {"type": "string", "description": "Where the request came from, empty behind a tunnel"},
+          "created_at": {"type": "integer"},
+          "expires_at": {"type": "integer"}
         }
       },
       "GrantList": {

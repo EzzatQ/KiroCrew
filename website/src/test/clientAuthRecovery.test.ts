@@ -147,3 +147,56 @@ describe('client silent-refresh recovery (warm / background-poll path)', () => {
     expect(bannerEl()).toBeNull()          // recovered again, no banner
   })
 })
+
+describe('iOS shell reauth bridge', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+  let originalFetch: typeof fetch
+  const post = vi.fn()
+
+  beforeEach(() => {
+    __resetAuthRecoveryStateForTests()
+    post.mockReset()
+    fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }))
+    originalFetch = globalThis.fetch
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+  })
+
+  afterEach(() => {
+    delete (window as unknown as { webkit?: unknown }).webkit
+    globalThis.fetch = originalFetch
+    __resetAuthRecoveryStateForTests()
+  })
+
+  const installShell = (): void => {
+    ;(window as unknown as { webkit: unknown }).webkit = {
+      messageHandlers: { kirocrewAuth: { postMessage: post } },
+    }
+  }
+
+  it('asks the app to reauth once per document, after silent refresh fails, instead of the banner', async () => {
+    installShell()
+    checkSessionExpired(deny403())
+    await flushMicrotasks()
+    checkSessionExpired(deny403())
+    checkSessionExpired(deny403())
+    await flushMicrotasks()
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(post).toHaveBeenCalledWith({ type: 'reauth' })
+    expect(bannerEl()).toBeNull()
+  })
+
+  it('does not ask while the silent refresh recovers', async () => {
+    installShell()
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }))
+    checkSessionExpired(deny403())
+    await flushMicrotasks()
+    expect(post).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the paste banner when there is no shell', async () => {
+    checkSessionExpired(deny403())
+    await flushMicrotasks()
+    expect(post).not.toHaveBeenCalled()
+    expect(bannerEl()).not.toBeNull()
+  })
+})

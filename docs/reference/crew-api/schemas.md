@@ -495,6 +495,51 @@ Only saved workflows the user marked "allow third parties"; source and intent ar
 | `object` | string | no |  |
 | `deleted` | `true` | yes |  |
 
+## DeviceApproval
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `object` | `device_approval` | yes |  |
+| `status` | `approved`, `denied` | yes |  |
+| `client_id` | string | yes |  |
+| `device_name` | string | yes | As the device reported it. |
+| `verified` | `false` | yes | A program reported the name and id; nothing verified them. |
+| `source_ip` | string | yes | Where the request came from. Empty behind a tunnel. |
+| `created_at` | integer | yes |  |
+| `expires_at` | integer | yes |  |
+
+## DeviceApprovalRequest
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `user_code` | string | yes | The code the device shows, as XXXX-XXXX. Case and the dash are not significant. |
+| `approve` | boolean (default `true`) | no | false denies the request. |
+
+## DeviceRequest
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `object` | `device_request` | yes |  |
+| `client_id` | string | yes |  |
+| `device_name` | string | yes | As the device reported it. |
+| `verified` | `false` | yes | A program reported the name and id; nothing verified them. |
+| `source_ip` | string | yes | Where the request came from. Empty behind a tunnel. |
+| `via_tunnel` | boolean | yes | true when the request came through a tunnel, which hides the address. |
+| `created_at` | integer | yes |  |
+| `expires_at` | integer | yes |  |
+| `age` | integer | yes | Seconds since the device asked. |
+| `expires_in` | integer | yes | Seconds until the request expires. |
+
+## DeviceRequestList
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `object` | `list` | yes |  |
+| `data` | array of [DeviceRequest](schemas.md#devicerequest) | yes |  |
+| `first_id` | string or null | yes |  |
+| `last_id` | string or null | yes |  |
+| `has_more` | `false` | yes |  |
+
 ## Entitlement
 
 What Kiro allows an app to ask for. It is a second gate beside scope: an entitlement decides whether the app may ask, a scope whether the user granted it. The crew checks ent from phase 1 on; phase 1 has only local-development entitlements, which an owner sets for apps they registered themselves; review by Kiro starts in phase 2. Open enum.
@@ -615,13 +660,14 @@ Client-side tool. Needs the `client_tools` capability and must match the tool of
 | `status` | [GrantStatus](schemas.md#grantstatus) | yes | Only these four values are used. Revoked grants are no longer listed. |
 | `pause` | object or null | no | Only when paused. |
 | `created_at` | [Timestamp](schemas.md#timestamp) | yes | Unix seconds. |
-| `last_used_at` | integer or null | no |  |
+| `last_used_at` | integer or null | no | For a device grant, when it last refreshed, in Unix seconds. |
+| `last_ip` | string | no | A device grant only: the address of its last refresh. Empty behind a tunnel or proxy. |
 | `quota` | [Quota](schemas.md#quota) | no |  |
 | `usage_7d` | array of object | no |  |
 | `monitor` | object | no |  |
-| `kind` | `remote`, `local` | no | remote: issued by the Kiro authorization service; local: local authorization, issued by this gateway. |
+| `kind` | `remote`, `local`, `device` | no | remote: issued by the Kiro authorization service; local: local authorization, issued by this gateway; device: a phone paired with the device flow (RFC 8628), which can open a dashboard session and call no /v1 route. |
 | `namespace` | string | no | Stored on every record of local authorization; one fixed value, `default`, today. |
-| `expires_at` | integer | no | A local grant only: the latest the grant can last, in Unix seconds. It ends, and leaves the list, earlier when its refresh token runs out unused. |
+| `expires_at` | integer | no | A local grant only: the latest the grant can last, in Unix seconds. It ends, and leaves the list, earlier when its refresh token runs out unused. A device grant has no absolute limit; for it this is when its refresh runs out if it is not used again. |
 
 ## GrantBots
 

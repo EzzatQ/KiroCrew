@@ -80,6 +80,8 @@ Endpoints only the owner of this Kiro Crew may call. Every path starts with `/v1
 | [`GET /v1/crew/owner/grant-requests`](owner-consent.md#get-v1crewownergrant-requests) | List grant requests waiting for consent | Available now: owner only | stable |
 | [`GET /v1/crew/owner/grant-requests/{request_id}`](owner-consent.md#get-v1crewownergrant-requestsrequest_id) | Read one grant request | Available now: owner only | stable |
 | [`POST /v1/crew/owner/grant-requests/{request_id}/decision`](owner-consent.md#post-v1crewownergrant-requestsrequest_iddecision) | Approve or deny a grant request | Available now: owner only | stable |
+| [`GET /v1/crew/owner/device-approvals`](owner-consent.md#get-v1crewownerdevice-approvals) | Look up a device pairing request, or list the waiting ones | Available now: owner only | stable |
+| [`POST /v1/crew/owner/device-approvals`](owner-consent.md#post-v1crewownerdevice-approvals) | Approve or deny a device pairing request | Available now: owner only | stable |
 | [`GET /v1/crew/owner/approvals`](owner-approvals.md#get-v1crewownerapprovals) | List tool approvals | Available now: owner only | stable |
 | [`GET /v1/crew/owner/approvals/{approval_id}`](owner-approvals.md#get-v1crewownerapprovalsapproval_id) | Read one tool approval | Available now: owner only | stable |
 | [`POST /v1/crew/owner/approvals/{approval_id}/decision`](owner-approvals.md#post-v1crewownerapprovalsapproval_iddecision) | Answer a tool approval | Available now: owner only | stable |

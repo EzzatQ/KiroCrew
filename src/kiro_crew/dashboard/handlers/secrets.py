@@ -32,7 +32,10 @@ from kiro_crew.config.loader import (
     read_env_text,
 )
 from kiro_crew.config.resolution import DEGRADED_WHOLE_CONFIG
-from kiro_crew.dashboard.handlers.source_providers import is_owner_dashboard_request
+from kiro_crew.dashboard.handlers.source_providers import (
+    is_owner_dashboard_request,
+    stale_owner_session_response,
+)
 from kiro_crew.dashboard.origin import is_direct_local_request
 from kiro_crew.dashboard.source_providers.gerrit import (
     GLOBAL_CREDENTIAL_NAME as GERRIT_GLOBAL_CREDENTIAL_NAME,
@@ -431,6 +434,9 @@ async def _owner_only(request: web.Request, operation: str) -> web.Response | No
         )
     except Exception:  # pragma: no cover — audit must never change the outcome
         logger.debug("SEL audit for non-owner %s failed", operation, exc_info=True)
+    stale = stale_owner_session_response(request)
+    if stale is not None:
+        return stale
     return web.json_response(
         {"error": "owner authorization required", "code": "owner_only"},
         status=403,

@@ -30,15 +30,17 @@ import logging
 from aiohttp import web
 
 from kiro_crew.dashboard.app_token_refusal import app_token_refusal
+from kiro_crew.dashboard.device_pair_claim import PAIR_CLAIM
 from kiro_crew.dashboard.handlers._shared import _caller_bounds, _is_restricted_session
 from kiro_crew.dashboard.handlers.mobile_connect import mint_denied_reason
+from kiro_crew.dashboard.handlers.source_providers import is_host_owner_dashboard_request
 from kiro_crew.dashboard.handlers.tailnet_mobile import MOBILE_QR_BOX_SIZE
 from kiro_crew.dashboard.origin import check_origin
 from kiro_crew.dashboard.token_auth import (
     LINK_WINDOW_SECS,
     generate_token,
 )
-from kiro_crew.dashboard.urls import build_dashboard_url, dashboard_origin
+from kiro_crew.dashboard.urls import build_dashboard_url, cors_external_origin, dashboard_origin
 from kiro_crew.qr import render_qr_data_uri
 from kiro_crew.sel import sel as _sel_fn
 
@@ -68,6 +70,20 @@ async def _audit_async(user_id: str, outcome: str, error: str = "") -> None:
     gateway is serving.
     """
     await asyncio.to_thread(_audit, user_id, outcome, error)
+
+
+async def _pair_intent(request: web.Request) -> bool:
+    """Whether a POST body of ``{"pair": true}`` asks for a pairing link. Any other
+    body, or none, is an ordinary link."""
+    if request.method != "POST" or not request.can_read_body:
+        return False
+    if request.content_length is None or request.content_length > 1024:
+        return False
+    try:
+        body = await request.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and body.get("pair") is True
 
 
 async def api_auth_mobile_link(request: web.Request) -> web.Response:
@@ -108,11 +124,19 @@ async def api_auth_mobile_link(request: web.Request) -> web.Response:
             {"error": "restricted_session", "code": "restricted_session"}, status=403
         )
 
-    external_origin = dashboard_origin(request.app.get("dashboard_url", ""))
+    external_origin = (
+        dashboard_origin(request.app.get("dashboard_url", "")) or cors_external_origin()
+    )
     if not external_origin:
         await _audit_async(user_id, "external_origin_unavailable")
         return web.json_response(
-            {"error": "external_origin_unavailable", "code": "external_origin_unavailable"},
+            {
+                "error": "external_origin_unavailable",
+                "code": "external_origin_unavailable",
+                # The one setting that fixes it; KIROCREW_CORS_ORIGINS is used only when it
+                # names a single explicit origin.
+                "setting": "dashboard.url",
+            },
             status=409,
         )
 
@@ -124,6 +148,15 @@ async def api_auth_mobile_link(request: web.Request) -> web.Response:
         return web.json_response(
             {"error": "caller_session_expired", "code": "caller_session_expired"}, status=403
         )
+
+    pair = await _pair_intent(request)
+    if pair:
+        # The host owner's explicit intent to pair a phone with this one scan: the
+        # link's session may answer one pairing request (device_pair_claim).
+        if not is_host_owner_dashboard_request(request):
+            await _audit_async(user_id, "pair_not_owner")
+            return web.json_response({"error": "owner_only", "code": "owner_only"}, status=403)
+        carried[PAIR_CLAIM] = "1"
 
     caller_peer_key = carried.pop("peer_key", "")
     token = generate_token(
@@ -142,6 +175,8 @@ async def api_auth_mobile_link(request: web.Request) -> web.Response:
         # overstates how long the link actually works.
         "expires_in": min(LINK_WINDOW_SECS, ttl_ceiling),
     }
+    if pair:
+        body["pair"] = True
     # The same link as a scannable code, so a phone reaches a non-tailnet
     # origin (a cloudflared tunnel, a reverse proxy) with one scan. Optional:
     # the link alone is the working credential, so a failed encode drops the

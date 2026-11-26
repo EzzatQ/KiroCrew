@@ -585,6 +585,198 @@ paths:
         is required; authenticated remote access is allowed. Shared Crew teammates (relay, SSM guests and tailnet collaborators)
         and app tokens receive 403 owner_only. Host-owner-only consent prevents issuing a local credential that outlives a
         teammate's access; the RFC's rule that the Owner tier is for the owner only requires it.
+  /v1/crew/owner/device-approvals:
+    get:
+      operationId: get_v1_crew_owner_device_approvals
+      summary: Look up a device pairing request, or list the waiting ones
+      tags:
+      - consent
+      security:
+      - firstPartySession: []
+      parameters:
+      - $ref: ./components.yaml#/components/parameters/CrewApiVersion
+      - $ref: ./components.yaml#/components/parameters/RequestId
+      - name: user_code
+        in: query
+        required: false
+        description: The code the device shows, as XXXX-XXXX. Case and the dash are not significant. Left out, the
+          call lists every waiting request instead.
+        schema:
+          type: string
+          maxLength: 32
+      responses:
+        '200':
+          description: Who is asking, so the owner can decide before answering; with no user_code, the waiting
+            requests, oldest first
+          headers:
+            X-Request-Id:
+              $ref: ./components.yaml#/components/headers/X-Request-Id
+            Crew-API-Version:
+              $ref: ./components.yaml#/components/headers/Crew-API-Version
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/DeviceRequest'
+                - $ref: '#/components/schemas/DeviceRequestList'
+        '400':
+          description: 'invalid_request: user_code is missing or too long'
+          headers:
+            X-Request-Id:
+              $ref: ./components.yaml#/components/headers/X-Request-Id
+            Crew-API-Version:
+              $ref: ./components.yaml#/components/headers/Crew-API-Version
+          content:
+            application/json:
+              schema:
+                $ref: ./components.yaml#/components/schemas/Error
+              examples:
+                invalid_request:
+                  summary: The code is missing.
+                  value:
+                    error:
+                      type: invalid_request_error
+                      code: invalid_request
+                      message: user_code is required
+                      param: null
+                      request_id: req_01JBXQ4K7Y2M
+        '401':
+          $ref: ./components.yaml#/components/responses/OwnerUnauthorized
+        '403':
+          $ref: ./components.yaml#/components/responses/OwnerForbidden
+        '404':
+          $ref: ./components.yaml#/components/responses/NotFoundNoQuota
+        '429':
+          description: 'rate_limited: more than 10 lookups and answers in a minute'
+          headers:
+            X-Request-Id:
+              $ref: ./components.yaml#/components/headers/X-Request-Id
+            Crew-API-Version:
+              $ref: ./components.yaml#/components/headers/Crew-API-Version
+          content:
+            application/json:
+              schema:
+                $ref: ./components.yaml#/components/schemas/Error
+              examples:
+                rate_limited:
+                  summary: Too many attempts.
+                  value:
+                    error:
+                      type: rate_limit_error
+                      code: rate_limited
+                      message: too many attempts; wait a minute
+                      param: null
+                      request_id: req_01JBXQ4K7Y2M
+        '500':
+          $ref: ./components.yaml#/components/responses/InternalErrorNoQuota
+        '503':
+          $ref: ./components.yaml#/components/responses/InstanceUnavailableNoQuota
+      x-crew-tier: owner
+      x-crew-scope: grants:manage
+      x-crew-phase: 1a
+      x-crew-status: available
+      x-crew-available-to: owner
+      x-crew-reuses:
+      - none, new
+      x-crew-coverage: done
+      description: What the owner sees before answering a device's pairing request, found by the user code the device
+        shows. Without user_code it lists the requests waiting for the owner, oldest first, each with the code the
+        device shows; at most 30 lists a minute, apart from the limit of the answers. Changes nothing. The device name is the device's own text and nothing verified it. An unknown, expired
+        or already answered code is the same 404 not_found as on the answer. The host owner's credential is required;
+        Shared Crew teammates and app tokens receive 403 owner_only. A lookup by code shares the 10 a minute limit of the answer.
+    post:
+      operationId: post_v1_crew_owner_device_approvals
+      summary: Approve or deny a device pairing request
+      tags:
+      - consent
+      security:
+      - firstPartySession: []
+      parameters:
+      - $ref: ./components.yaml#/components/parameters/CrewApiVersion
+      - $ref: ./components.yaml#/components/parameters/RequestId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceApprovalRequest'
+      responses:
+        '200':
+          description: The pairing request after the answer
+          headers:
+            X-Request-Id:
+              $ref: ./components.yaml#/components/headers/X-Request-Id
+            Crew-API-Version:
+              $ref: ./components.yaml#/components/headers/Crew-API-Version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceApproval'
+        '400':
+          description: 'invalid_request: user_code is missing or too long, or approve is not a boolean'
+          headers:
+            X-Request-Id:
+              $ref: ./components.yaml#/components/headers/X-Request-Id
+            Crew-API-Version:
+              $ref: ./components.yaml#/components/headers/Crew-API-Version
+          content:
+            application/json:
+              schema:
+                $ref: ./components.yaml#/components/schemas/Error
+              examples:
+                invalid_request:
+                  summary: The code is missing.
+                  value:
+                    error:
+                      type: invalid_request_error
+                      code: invalid_request
+                      message: user_code is required and approve must be a boolean
+                      param: null
+                      request_id: req_01JBXQ4K7Y2M
+        '401':
+          $ref: ./components.yaml#/components/responses/OwnerUnauthorized
+        '403':
+          $ref: ./components.yaml#/components/responses/OwnerForbidden
+        '404':
+          $ref: ./components.yaml#/components/responses/NotFoundNoQuota
+        '429':
+          description: 'rate_limited: more than 10 answers in a minute'
+          headers:
+            X-Request-Id:
+              $ref: ./components.yaml#/components/headers/X-Request-Id
+            Crew-API-Version:
+              $ref: ./components.yaml#/components/headers/Crew-API-Version
+          content:
+            application/json:
+              schema:
+                $ref: ./components.yaml#/components/schemas/Error
+              examples:
+                rate_limited:
+                  summary: Too many attempts.
+                  value:
+                    error:
+                      type: rate_limit_error
+                      code: rate_limited
+                      message: too many attempts; wait a minute
+                      param: null
+                      request_id: req_01JBXQ4K7Y2M
+        '500':
+          $ref: ./components.yaml#/components/responses/InternalErrorNoQuota
+        '503':
+          $ref: ./components.yaml#/components/responses/InstanceUnavailableNoQuota
+      x-crew-tier: owner
+      x-crew-scope: grants:manage
+      x-crew-phase: 1a
+      x-crew-status: available
+      x-crew-available-to: owner
+      x-crew-reuses:
+      - none, new
+      x-crew-coverage: done
+      description: The host owner's answer to a device's pairing request (RFC 8628), found by the user code the device
+        shows. An approval lets the device's next poll of POST /oauth/token receive its device grant; a denial (approve set to false) ends the
+        request. An unknown, expired or already answered code is one and the same 404 not_found. The host owner's credential
+        is required; Shared Crew teammates and app tokens receive 403 owner_only. At most 10 answers a minute, shared with the lookup.
+        The body must carry a Content-Length header, and a chunked body without one is a 400 invalid_request.
   /v1/crew/owner/approvals:
     get:
       operationId: get_v1_crew_owner_approvals
@@ -1254,6 +1446,128 @@ components:
             type: array
             items:
               $ref: '#/components/schemas/GrantRequest'
+    DeviceApprovalRequest:
+      type: object
+      required:
+      - user_code
+      additionalProperties: false
+      properties:
+        user_code:
+          type: string
+          maxLength: 32
+          description: The code the device shows, as XXXX-XXXX. Case and the dash are not significant.
+        approve:
+          type: boolean
+          default: true
+          description: false denies the request.
+    DeviceRequest:
+      type: object
+      required:
+      - object
+      - client_id
+      - device_name
+      - verified
+      - source_ip
+      - via_tunnel
+      - created_at
+      - expires_at
+      - age
+      - expires_in
+      properties:
+        object:
+          const: device_request
+        client_id:
+          type: string
+        device_name:
+          type: string
+          maxLength: 80
+          description: As the device reported it.
+        verified:
+          const: false
+          description: A program reported the name and id; nothing verified them.
+        source_ip:
+          type: string
+          description: Where the request came from. Empty behind a tunnel.
+        via_tunnel:
+          type: boolean
+          description: true when the request came through a tunnel, which hides the address.
+        created_at:
+          type: integer
+        expires_at:
+          type: integer
+        age:
+          type: integer
+          description: Seconds since the device asked.
+        expires_in:
+          type: integer
+          description: Seconds until the request expires.
+    DeviceRequestList:
+      type: object
+      required:
+      - object
+      - data
+      - first_id
+      - last_id
+      - has_more
+      properties:
+        object:
+          const: list
+        data:
+          type: array
+          items:
+            allOf:
+            - $ref: '#/components/schemas/DeviceRequest'
+            - type: object
+              required:
+              - user_code
+              properties:
+                user_code:
+                  type: string
+                  description: The code the device shows, as XXXX-XXXX.
+        first_id:
+          type:
+          - string
+          - 'null'
+        last_id:
+          type:
+          - string
+          - 'null'
+        has_more:
+          const: false
+    DeviceApproval:
+      type: object
+      required:
+      - object
+      - status
+      - client_id
+      - device_name
+      - verified
+      - source_ip
+      - created_at
+      - expires_at
+      properties:
+        object:
+          const: device_approval
+        status:
+          enum:
+          - approved
+          - denied
+        client_id:
+          type: string
+        device_name:
+          type: string
+          maxLength: 80
+          description: As the device reported it.
+        verified:
+          const: false
+          description: A program reported the name and id; nothing verified them.
+        source_ip:
+          type: string
+          description: Where the request came from. Empty behind a tunnel.
+        created_at:
+          type: integer
+        expires_at:
+          type: integer
     GrantRequestDecision:
       type: object
       required:
@@ -1514,6 +1828,10 @@ components:
           type:
           - integer
           - 'null'
+          description: For a device grant, when it last refreshed, in Unix seconds.
+        last_ip:
+          type: string
+          description: 'A device grant only: the address of its last refresh. Empty behind a tunnel or proxy.'
         quota:
           allOf:
           - $ref: ./components.yaml#/components/schemas/Quota
@@ -1543,15 +1861,18 @@ components:
           enum:
           - remote
           - local
+          - device
           description: 'remote: issued by the Kiro authorization service; local: local authorization, issued by
-            this gateway.'
+            this gateway; device: a phone paired with the device flow (RFC 8628), which can open a dashboard session
+            and call no /v1 route.'
         namespace:
           type: string
           description: Stored on every record of local authorization; one fixed value, `default`, today.
         expires_at:
           type: integer
           description: 'A local grant only: the latest the grant can last, in Unix seconds. It ends, and leaves the
-            list, earlier when its refresh token runs out unused.'
+            list, earlier when its refresh token runs out unused. A device grant has no absolute limit; for it this is
+            when its refresh runs out if it is not used again.'
     GrantBots:
       type: object
       required:

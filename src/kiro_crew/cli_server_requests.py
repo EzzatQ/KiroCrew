@@ -22,6 +22,7 @@ import urllib.request
 
 from kiro_crew.cli_server_peer import (
     _CLI_LOOPBACK,
+    _existing_dashboard_socket,
     _GatewayPeerRefused,
     _owner_verified_secret_urlopen,
 )
@@ -180,7 +181,14 @@ def _token(args: argparse.Namespace) -> None:
     # pre-flight port snapshot precedes it -- that check was both weaker (a port
     # snapshot a foreign listener can defeat on restart) and a second, redundant
     # way for a legitimate sign-in to fail.
-    secret = read_local_secret(port, dial_host=_CLI_LOOPBACK)
+    # With the owner-only unix socket present the mint rides it, never TCP, so the secret
+    # is not paired with a loopback listener: a gateway bound to a LAN address
+    # (KIROCREW_BIND) publishes none and pairing would fail closed for a live gateway. The
+    # send still proves the socket peer before any byte. Without the socket the send is
+    # loopback TCP, so the secret stays paired with the address it is dialled on.
+    secret = read_local_secret(
+        port, dial_host=None if _existing_dashboard_socket(port) else _CLI_LOOPBACK
+    )
     if not secret:
         print("❌ Gateway not running — start it with: kirocrew gateway", file=sys.stderr)
         sys.exit(1)
@@ -393,7 +401,11 @@ def _logout(port: int, link: str | None = None) -> None:
     # positive MATCH and audits allowed/denied itself. No pre-flight port
     # snapshot precedes it -- that check was weaker and a second redundant way
     # for a legitimate sign-in to fail.
-    secret = read_local_secret(port, dial_host=_CLI_LOOPBACK)
+    # With the owner-only socket present the send rides it (same guard as ``kirocrew
+    # token``), so a gateway bound to a LAN address still reads as running.
+    secret = read_local_secret(
+        port, dial_host=None if _existing_dashboard_socket(port) else _CLI_LOOPBACK
+    )
     if not secret:
         print("❌ Gateway not running — start it with: kirocrew gateway", file=sys.stderr)
         sys.exit(1)

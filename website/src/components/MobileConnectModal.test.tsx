@@ -15,7 +15,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { Provider } from 'react-redux'
@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => ({
   tailnetMobile: vi.fn(),
   tailnetMobileQr: vi.fn(),
   mobileLoginLink: vi.fn(),
+  pendingDevices: vi.fn(),
+  approveDevice: vi.fn(),
+  lookupDevice: vi.fn(),
   sharedCrewCapabilities: vi.fn(),
 }))
 vi.mock('../api/client', () => ({ api: mocks }))
@@ -55,6 +58,10 @@ beforeEach(() => {
   mocks.tailnetMobile.mockReset()
   mocks.tailnetMobileQr.mockReset()
   mocks.mobileLoginLink.mockReset()
+  mocks.pendingDevices.mockReset()
+  mocks.approveDevice.mockReset()
+  mocks.lookupDevice.mockReset()
+  mocks.pendingDevices.mockResolvedValue([])
   mocks.tailnetMobile.mockResolvedValue({ step: 'ready' })
   mocks.sharedCrewCapabilities.mockReset()
   mocks.sharedCrewCapabilities.mockResolvedValue(null)
@@ -562,3 +569,54 @@ describe('MobileConnectModal direct tailnet link', () => {
   })
 })
 
+describe('MobileConnectModal pairing', () => {
+  const waiting = {
+    client_id: 'kirocrew-ios',
+    device_name: "Alex's iPhone",
+    user_code: 'ABCD-EFGH',
+    source_ip: '192.168.1.50',
+    via_tunnel: false,
+    created_at: 1,
+    expires_at: Math.floor(Date.now() / 1000) + 300,
+    age: 1,
+    expires_in: 300,
+  }
+
+  it('asks for a link with pair intent and says one scan signs in and pairs', async () => {
+    mocks.mobileLoginLink.mockResolvedValue({ url: 'https://ext/?token=once', expires_in: 300, pair: true })
+    mount(['login_link'])
+    fireEvent.click(await screen.findByText('Create sign-in link'))
+    expect(await screen.findByTestId('mobile-connect-pair-note')).toHaveTextContent('Scan once to sign in and pair')
+    expect(mocks.mobileLoginLink).toHaveBeenCalledWith(undefined, true)
+  })
+
+  it('falls back to a plain link, with no pairing note, for a session that is not the host owner', async () => {
+    mocks.mobileLoginLink
+      .mockRejectedValueOnce(Object.assign(new Error('403'), { body: JSON.stringify({ code: 'owner_only' }) }))
+      .mockResolvedValueOnce({ url: 'https://ext/?token=once', expires_in: 300 })
+    mount(['login_link'])
+    fireEvent.click(await screen.findByText('Create sign-in link'))
+    expect(await screen.findByLabelText('Sign-in link')).toBeInTheDocument()
+    expect(mocks.mobileLoginLink).toHaveBeenNthCalledWith(2, undefined)
+    expect(screen.queryByTestId('mobile-connect-pair-note')).not.toBeInTheDocument()
+  })
+
+  it('lists a waiting request and approves it from the dialog', async () => {
+    mocks.pendingDevices.mockResolvedValue([waiting])
+    mocks.approveDevice.mockResolvedValue({ status: 'approved', device_name: waiting.device_name, source_ip: '' })
+    mount(['login_link'])
+    const section = await screen.findByTestId('mobile-connect-pair')
+    expect(await within(section).findByText("Alex's iPhone")).toBeInTheDocument()
+    expect(within(section).getByText('Pair a phone')).toBeInTheDocument()
+    fireEvent.click(within(section).getByRole('button', { name: 'Approve' }))
+    await waitFor(() => expect(mocks.approveDevice).toHaveBeenCalledWith('ABCD-EFGH', true))
+  })
+
+  it('shows no pairing section when the owner routes refuse this session', async () => {
+    mocks.pendingDevices.mockRejectedValue(new Error('403'))
+    mount(['login_link'])
+    await screen.findByText('Create sign-in link')
+    await waitFor(() => expect(mocks.pendingDevices).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByTestId('mobile-connect-pair')?.textContent ?? '').not.toMatch(/Pair a phone/))
+  })
+})

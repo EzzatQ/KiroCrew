@@ -44,6 +44,21 @@ describe('MobileLoginCard', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Link copied')
   })
 
+  it('asks for a link with pair intent, and falls back to a plain link for a non-owner', async () => {
+    const mint = api.mobileLoginLink as ReturnType<typeof vi.fn>
+    mint.mockReset()
+    mint
+      .mockRejectedValueOnce(Object.assign(new Error('403'), { body: JSON.stringify({ code: 'owner_only' }) }))
+      .mockResolvedValueOnce({ url: 'https://dashboard.example/?token=plain', expires_in: 300 })
+
+    renderWithProviders(<MobileLoginCard />)
+    fireEvent.click(screen.getByRole('button', { name: 'Create mobile sign-in link' }))
+
+    expect(await screen.findByLabelText('Mobile sign-in link')).toHaveValue('https://dashboard.example/?token=plain')
+    expect(mint).toHaveBeenNthCalledWith(1, undefined, true)
+    expect(mint).toHaveBeenNthCalledWith(2, undefined)
+  })
+
   it('shows a retryable error when the dashboard cannot mint the link', async () => {
     ;(api.mobileLoginLink as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('offline'))
 

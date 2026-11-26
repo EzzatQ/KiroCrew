@@ -177,6 +177,21 @@ class Gateway:
         request_id, _ = self._ask(f"{_APP_CLIENT}-{uuid.uuid4().hex[:8]}")
         return request_id
 
+    def pending_device_code(self) -> str:
+        """The user code of a device pairing request no one has answered."""
+        form = urllib.parse.urlencode({"client_id": "kirocrew-ios", "client_name": "Contract test"})
+        asked = self._must(
+            self._http(
+                "POST",
+                "/oauth/device_authorization",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                body=form.encode(),
+            ),
+            200,
+            "POST /oauth/device_authorization",
+        )
+        return str(json.loads(asked.body)["user_code"])
+
     def answered_grant_request(self) -> str:
         """The id of a grant request the owner has denied, from an app of its own."""
         request_id = self.pending_grant_request()
@@ -246,6 +261,9 @@ class Gateway:
         for name in _placeholders(path):
             value = urllib.parse.quote(str(params.get(name, "unknown")), safe="")
             path = path.replace("{" + name + "}", value)
+        query = case.query(self) if callable(case.query) else case.query
+        if query:
+            path += "?" + urllib.parse.urlencode(query)
         request_id = "req_" + uuid.uuid4().hex
         headers = {REQUEST_ID: request_id}
         credential = self._credential(case.caller)

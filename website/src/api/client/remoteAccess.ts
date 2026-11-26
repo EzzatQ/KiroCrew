@@ -173,17 +173,60 @@ export interface RemoteControlState {
   problem?: string
 }
 
-export function createRemoteAccessEndpoints({ get, post, put, j }: ClientTransport) {
+/** A device grant from `GET /v1/crew/owner/grants` (only the fields the Devices list reads). */
+export interface DeviceGrant {
+  id: string
+  kind: string
+  app: { name: string }
+  created_at: number
+  last_used_at: number | null
+  /** Empty behind a tunnel, where the address is the tunnel's. */
+  last_ip: string
+}
+
+/** `POST /v1/crew/owner/device-approvals`: what the owner just answered. */
+export interface DeviceApproval {
+  status: 'approved' | 'denied'
+  client_id: string
+  device_name: string
+  source_ip: string
+}
+
+/** `GET /v1/crew/owner/device-approvals?user_code=`: who asks, before the owner answers. */
+export interface DeviceRequest {
+  client_id: string
+  /** The device's own text; nothing verified it. */
+  device_name: string
+  source_ip: string
+  via_tunnel: boolean
+  age: number
+  expires_in: number
+  /** Unix seconds; the page counts down to it. */
+  expires_at: number
+}
+
+/** One row of `GET /v1/crew/owner/device-approvals` with no code: a request still waiting. */
+export interface PendingDeviceRequest extends DeviceRequest {
+  /** The code the device shows, as XXXX-XXXX. */
+  user_code: string
+}
+
+export function createRemoteAccessEndpoints({ get, post, put, del, j }: ClientTransport) {
   const mobileAccess = {
     // `sessionKey` MUST carry the active slot's key (`dashboard:<slot>`) when one
     // is active: the server's restricted-session guard reads X-Session-Key, and
     // the shared `dashboard:ui` default answers "not restricted" — which would
     // let an incognito/temporary slot mint a durable any-device credential. Same
     // cooperative-honesty contract as the tailnet mobile surface.
-    mobileLoginLink: (sessionKey?: string) =>
-      post('/api/auth/mobile-link', undefined, sessionKey).then(j) as Promise<{
+    //
+    // `pair` asks the host owner's gateway for a link whose session may approve ONE
+    // pairing request from the phone that opens it (scan once = signed in + paired).
+    mobileLoginLink: (sessionKey?: string, pair = false) =>
+      post('/api/auth/mobile-link', pair ? { pair: true } : undefined, sessionKey).then(j) as Promise<{
       url: string
       expires_in: number
+      /** Echoed when the link carries the one-scan pairing claim. */
+      pair?: boolean
       /** The same link as a PNG data URI QR code, rendered server-side. Absent
        *  when the encode failed: the link alone still works. A credential. */
       image?: string
@@ -220,6 +263,25 @@ export function createRemoteAccessEndpoints({ get, post, put, j }: ClientTranspo
     // it instead of the shared `dashboard:ui` placeholder.
     tailnetMobileQr: (sessionKey?: string) =>
       post('/api/tailnet/mobile/qr', {}, sessionKey).then(j) as Promise<TailnetMobileQr>,
+    // Paired phones (Settings > Security > Devices). Owner-only routes; the page
+    // lists every grant and keeps the device ones.
+    deviceGrants: () =>
+      get('/v1/crew/owner/grants?limit=100')
+        .then(j)
+        .then((body) => (body as { data: DeviceGrant[] }).data.filter((g) => g.kind === 'device')),
+    lookupDevice: (userCode: string) =>
+      get(`/v1/crew/owner/device-approvals?user_code=${encodeURIComponent(userCode)}`).then(
+        j,
+      ) as Promise<DeviceRequest>,
+    approveDevice: (userCode: string, approve: boolean) =>
+      post('/v1/crew/owner/device-approvals', { user_code: userCode, approve }).then(
+        j,
+      ) as Promise<DeviceApproval>,
+    pendingDevices: () =>
+      get('/v1/crew/owner/device-approvals')
+        .then(j)
+        .then((body) => (body as { data: PendingDeviceRequest[] }).data),
+    revokeDevice: (grantId: string) => del(`/v1/crew/owner/grants/${encodeURIComponent(grantId)}`).then(j),
     remoteControl: () => get('/api/remote-control').then(j) as Promise<RemoteControlState>,
     /** One-click off writes an explicit `false`, so it stays off across a restart. */
     turnOffRemoteControl: () =>

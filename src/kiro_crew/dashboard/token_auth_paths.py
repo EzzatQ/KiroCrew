@@ -191,15 +191,21 @@ RELAY_VIEWER_TOKEN_PATH = "/api/relay-viewer/token"
 #: (it is not a session).
 CONNECTOR_CONNECT_PATH = "/api/connected-computers/connect"
 
-#: The four local authorization routes (``routes/local_authorization.py``): an app on
-#: this machine asks for a grant before it holds any credential. Each handler admits
-#: only a direct loopback request and gives nothing by itself: the owner answers the
-#: request through the Owner tier, and a code is redeemed only with the asking app's
-#: PKCE verifier. One method each; every other method stays behind the token gate.
+#: The local authorization routes (``routes/local_authorization.py``): an app asks for a
+#: grant before it holds any credential. The authorization-code flow admits only a direct
+#: loopback request; the device routes (pairing, device-code and refresh grants, revoke,
+#: metadata) also admit a LAN or same-host-tunnel caller and refuse a relayed one. None
+#: grants anything by itself: the owner answers a request through the Owner tier, a code
+#: is redeemed only with the asking app's PKCE verifier, and a device only with the code
+#: the owner approved. One method each; every other method stays behind the token gate.
 LOCAL_AUTH_METADATA_PATH = "/.well-known/oauth-authorization-server"
 LOCAL_AUTH_AUTHORIZE_PATH = "/oauth/authorize"
 LOCAL_AUTH_TOKEN_PATH = "/oauth/token"
 LOCAL_AUTH_REVOKE_PATH = "/oauth/revoke"
+LOCAL_AUTH_DEVICE_PATH = "/oauth/device_authorization"
+#: A paired device trades its short access token for the dashboard cookies here. The
+#: handler reads only the ``Authorization`` header.
+DEVICE_SESSION_PATH = "/api/auth/device-session"
 
 _BYPASS_EXACT_METHODS: dict[str, frozenset[str]] = {
     AGENT_HOOK_PATH: _SELF_AUTH_WEBHOOK_METHODS,
@@ -207,6 +213,8 @@ _BYPASS_EXACT_METHODS: dict[str, frozenset[str]] = {
     LOCAL_AUTH_AUTHORIZE_PATH: frozenset({"GET"}),
     LOCAL_AUTH_TOKEN_PATH: frozenset({"POST"}),
     LOCAL_AUTH_REVOKE_PATH: frozenset({"POST"}),
+    LOCAL_AUTH_DEVICE_PATH: frozenset({"POST"}),
+    DEVICE_SESSION_PATH: frozenset({"POST"}),
     AGENT_HOOK_STATUS_PATH: frozenset({"GET"}),
     CREW_OAUTH_CALLBACK_PATH: frozenset({"GET"}),
     RELAY_VIEWER_TOKEN_PATH: frozenset({"POST"}),
@@ -236,12 +244,21 @@ def _exact_method_bypass(path: str, method: str) -> bool:
 # cookie gate and skipping the Origin check are two different grants, and a route
 # may need one without the other.
 #
-# ONE entry, and adding a second is a security review rather than a copy of this
-# line. `/api/hooks/agent` shares the shape -- self-authenticating, cookie-less,
+# Adding an entry is a security review rather than a copy of an earlier line.
+# `/api/hooks/agent` shares the shape -- self-authenticating, cookie-less,
 # server-to-server -- and is in the token-auth bypass above, but it is NOT here:
 # no reported failure named it, its own proxy topologies already work, and a
 # perimeter exemption is far harder to withdraw once a caller depends on it than
 # it is to add later with its own cause.
+#
+# The four device routes are here for the same reason as the Teams route: a native app
+# (URLSession) sends no ``Origin``, and ``check_origin`` trusts a header-less request
+# only from loopback, so each POST from the LAN would be refused 403 before its handler
+# ran. None of the four reads a cookie: ``/oauth/device_authorization``, ``/oauth/token``
+# and ``/oauth/revoke`` take a body secret and ``/api/auth/device-session`` a Bearer
+# token, so a cross-origin page has nothing to ride and cannot forge any of them. A
+# request that DOES carry an ``Origin`` (a browser) is still held to the allowlist by
+# the handlers (``routes/local_authorization.browser_refused``).
 #
 # WHY dropping the Origin check is sound for the Teams route: CSRF exists to stop
 # a BROWSER making a cross-origin state-changing request that the browser then
@@ -267,6 +284,10 @@ def _exact_method_bypass(path: str, method: str) -> bool:
 # their wildcard.
 CSRF_EXEMPT_EXACT_METHODS: dict[str, frozenset[str]] = {
     TEAMS_WEBHOOK_PATH: _SELF_AUTH_WEBHOOK_METHODS,
+    LOCAL_AUTH_DEVICE_PATH: frozenset({"POST"}),
+    LOCAL_AUTH_TOKEN_PATH: frozenset({"POST"}),
+    LOCAL_AUTH_REVOKE_PATH: frozenset({"POST"}),
+    DEVICE_SESSION_PATH: frozenset({"POST"}),
 }
 
 

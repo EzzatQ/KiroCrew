@@ -128,13 +128,14 @@ Response body fields (`application/json`), [Grant](schemas.md#grant):
 | `status` | [GrantStatus](schemas.md#grantstatus) | yes | Only these four values are used. Revoked grants are no longer listed. |
 | `pause` | object or null | no | Only when paused. |
 | `created_at` | [Timestamp](schemas.md#timestamp) | yes | Unix seconds. |
-| `last_used_at` | integer or null | no |  |
+| `last_used_at` | integer or null | no | For a device grant, when it last refreshed, in Unix seconds. |
+| `last_ip` | string | no | A device grant only: the address of its last refresh. Empty behind a tunnel or proxy. |
 | `quota` | [Quota](schemas.md#quota) | no |  |
 | `usage_7d` | array of object | no |  |
 | `monitor` | object | no |  |
-| `kind` | `remote`, `local` | no | remote: issued by the Kiro authorization service; local: local authorization, issued by this gateway. |
+| `kind` | `remote`, `local`, `device` | no | remote: issued by the Kiro authorization service; local: local authorization, issued by this gateway; device: a phone paired with the device flow (RFC 8628), which can open a dashboard session and call no /v1 route. |
 | `namespace` | string | no | Stored on every record of local authorization; one fixed value, `default`, today. |
-| `expires_at` | integer | no | A local grant only: the latest the grant can last, in Unix seconds. It ends, and leaves the list, earlier when its refresh token runs out unused. |
+| `expires_at` | integer | no | A local grant only: the latest the grant can last, in Unix seconds. It ends, and leaves the list, earlier when its refresh token runs out unused. A device grant has no absolute limit; for it this is when its refresh runs out if it is not used again. |
 
 Errors. The response body is [Error](schemas.md#error); its `error.code` field holds the code.
 
@@ -257,13 +258,14 @@ Response body fields (`application/json`), [Grant](schemas.md#grant):
 | `status` | [GrantStatus](schemas.md#grantstatus) | yes | Only these four values are used. Revoked grants are no longer listed. |
 | `pause` | object or null | no | Only when paused. |
 | `created_at` | [Timestamp](schemas.md#timestamp) | yes | Unix seconds. |
-| `last_used_at` | integer or null | no |  |
+| `last_used_at` | integer or null | no | For a device grant, when it last refreshed, in Unix seconds. |
+| `last_ip` | string | no | A device grant only: the address of its last refresh. Empty behind a tunnel or proxy. |
 | `quota` | [Quota](schemas.md#quota) | no |  |
 | `usage_7d` | array of object | no |  |
 | `monitor` | object | no |  |
-| `kind` | `remote`, `local` | no | remote: issued by the Kiro authorization service; local: local authorization, issued by this gateway. |
+| `kind` | `remote`, `local`, `device` | no | remote: issued by the Kiro authorization service; local: local authorization, issued by this gateway; device: a phone paired with the device flow (RFC 8628), which can open a dashboard session and call no /v1 route. |
 | `namespace` | string | no | Stored on every record of local authorization; one fixed value, `default`, today. |
-| `expires_at` | integer | no | A local grant only: the latest the grant can last, in Unix seconds. It ends, and leaves the list, earlier when its refresh token runs out unused. |
+| `expires_at` | integer | no | A local grant only: the latest the grant can last, in Unix seconds. It ends, and leaves the list, earlier when its refresh token runs out unused. A device grant has no absolute limit; for it this is when its refresh runs out if it is not used again. |
 
 Errors. The response body is [Error](schemas.md#error); its `error.code` field holds the code.
 

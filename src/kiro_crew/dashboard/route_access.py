@@ -95,6 +95,23 @@ ROUTES: Final[dict[tuple[str, str], RouteAccess]] = {
     # Owner gate, then the machine owner alone (crew_api_grant_requests). The Crew API
     # RFC marks the Owner tier experimental. Contract test: test_crew_api_grant_requests.py.
     ("GET", "/v1/crew/owner/grants"): RouteAccess("crew_api.grants.list", PREVIEW),
+    # Owner gate, then the machine owner alone (crew_api_grant_requests.approve_device);
+    # answers a device's pairing request by its user code. Contract test:
+    # test_crew_api_grant_requests.py.
+    ("GET", "/v1/crew/owner/device-approvals"): RouteAccess(
+        "crew_api.device_approvals.lookup", PREVIEW
+    ),
+    ("POST", "/v1/crew/owner/device-approvals"): RouteAccess(
+        "crew_api.device_approvals.decide", PREVIEW
+    ),
+    # No credential, no cookie: a device's pairing request (RFC 8628), served to a LAN or
+    # same-host-tunnel caller and refused to a relayed one (routes/local_authorization.py).
+    ("POST", "/oauth/device_authorization"): RouteAccess(
+        "oauth.device_authorization.create", UNSTABLE
+    ),
+    # A device Bearer token, no cookie (handlers/auth_device_session.py); mints the
+    # dashboard cookie pair for a paired device.
+    ("POST", "/api/auth/device-session"): RouteAccess("auth.device_session.create", UNSTABLE),
     # Managed-environment lane (managed_env/routes.py): owner dashboard, 403 for a
     # teammate (teammate_access), 404 while the crew_client preview is off. The list
     # calls the service's List on every read, so it is not a `.read`.

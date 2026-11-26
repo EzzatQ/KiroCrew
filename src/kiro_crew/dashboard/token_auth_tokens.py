@@ -1413,8 +1413,6 @@ def revoke_token_family(token: str) -> bool:
     :data:`FAMILY_MARKER_CLAIM` or for a session with no :data:`FAMILY_CLAIM`. Raises ``OSError`` when the denylist could not be
     stored, like :func:`revoke_access_cookie`.
     """
-    from kiro_crew.dashboard.refresh_tokens import MAX_REFRESH_TTL_SECS
-
     parts = token.split(".", 1)
     if len(parts) != 2:
         return False
@@ -1440,6 +1438,20 @@ def revoke_token_family(token: str) -> bool:
         # session's own nonce would end it alone while the chain mints the next.
         raise LegacyFamilyLink("this session's chain predates per-link revocation")
     family = token_family(data)
+    if not family:
+        return False
+    return revoke_family_id(family)
+
+
+def revoke_family_id(family: str) -> bool:
+    """End the credential family *family* and every session and refresh chain in it.
+
+    :func:`revoke_token_family` for a caller that holds the family id, not a token: a
+    device grant's id is the family of every cookie chain it opened. Raises ``OSError``
+    when the denylist could not be stored. Returns False for an empty id.
+    """
+    from kiro_crew.dashboard.refresh_tokens import MAX_REFRESH_TTL_SECS
+
     if not family:
         return False
     key = _FAMILY_KEY_PREFIX + family

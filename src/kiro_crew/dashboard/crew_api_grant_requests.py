@@ -1,9 +1,10 @@
 """The owner's side of local authorization: list the waiting grant requests, read one,
-answer one, list the grants and revoke one.
+answer one, list the grants, revoke one and answer a device pairing request.
 
 Handlers for ``GET /v1/crew/owner/grant-requests``,
 ``GET /v1/crew/owner/grant-requests/{request_id}``,
 ``POST /v1/crew/owner/grant-requests/{request_id}/decision``,
+``POST /v1/crew/owner/device-approvals``,
 ``GET /v1/crew/owner/grants`` and ``DELETE /v1/crew/owner/grants/{grant_id}``. They are served only through
 :func:`kiro_crew.dashboard.crew_api_owner.owner_route`, which supplies the Crew API
 error shape and the ordinary owner gate. Every handler additionally requires the host
@@ -21,8 +22,11 @@ from aiohttp import web
 
 from kiro_crew.config.loader import KiroCrewConfig
 from kiro_crew.config.resolution import DEGRADED_WHOLE_CONFIG
+from kiro_crew.dashboard import device_pair_claim as pair
 from kiro_crew.dashboard import local_authorization as la
+from kiro_crew.dashboard.device_rate_limit import SlidingWindowLimiter
 from kiro_crew.dashboard.handlers.source_providers import is_host_owner_dashboard_request
+from kiro_crew.dashboard.token_auth_tokens import revoke_family_id
 from kiro_crew.members import is_dispatchable_member_name
 
 logger = logging.getLogger(__name__)
@@ -138,11 +142,14 @@ async def get_grant_request(request: web.Request) -> web.Response:
 
 def _grant(view: dict[str, Any]) -> dict[str, Any]:
     """A stored grant in the contract's ``Grant`` shape, with what this store keeps."""
+    device = view.get("kind") == la.DEVICE_CLASS
     return {
         "id": view["grant_id"],
         "object": "grant",
-        # Made through local authorization, by this gateway.
-        "kind": "local",
+        # Made through local authorization, by this gateway. A device grant says so, and
+        # adds when it last refreshed and from where (``""`` behind a tunnel).
+        "kind": "device" if device else "local",
+        **({"last_used_at": view["last_used_at"], "last_ip": view["last_ip"]} if device else {}),
         "namespace": view["namespace"],
         "client_id": view["client_id"],
         # As the app reported them; nothing verified the name or the id.
@@ -208,7 +215,210 @@ async def revoke_grant(request: web.Request) -> web.Response:
         return _error(*_UNAVAILABLE)
     if not revoked:
         return _error(404, "not_found", "no such grant, or it has expired")
+    try:
+        device = await asyncio.to_thread(
+            lambda: la.gateway_local_authorization().grant_class(grant_id) == la.DEVICE_CLASS
+        )
+        if device:
+            # The cookie chains a device opened end with its grant, at once. Repeating the
+            # call finishes a revoke whose first attempt could not store this.
+            await asyncio.to_thread(revoke_family_id, grant_id)
+    except Exception:
+        return _error(
+            503,
+            "cookie_revocation_failed",
+            "the grant is revoked but its dashboard sessions could not be ended; retry",
+        )
     return web.json_response({"id": grant_id, "object": "grant", "deleted": True})
+
+
+#: Answers to the owner's device-approval call per minute. The code is 8 characters of a
+#: 28-letter alphabet and lives 5 minutes; this keeps a stolen owner cookie from guessing it.
+_APPROVAL_LIMIT = SlidingWindowLimiter(10)
+
+
+def _pair_refusal(code: str) -> web.Response:
+    return _error(403, code, "this sign-in link can pair only the phone that opened it, once")
+
+
+def _audit_pair(subject: str, outcome: str, reason: str, view: dict[str, Any]) -> None:
+    """One row for each answer a one-scan pair session gives or is refused: who, which
+    device and from where. Never the code. A failed write does not change the answer."""
+    try:
+        from kiro_crew.sel import sel
+
+        sel().log_api_access(
+            caller=subject,
+            operation="local_auth.device_pair_once",
+            outcome=outcome,
+            source="local-authorization",
+            resources=f"client={view.get('client_id', '')}; ip={view.get('source', '')}"
+            + (f"; reason={reason}" if reason else ""),
+            critical=outcome == "approved",
+        )
+    except Exception:
+        logger.warning("Device pair-claim audit failed")
+
+
+#: Lists per minute. The Devices page polls this while it is open, so it has a budget
+#: of its own and never uses up the owner's answers.
+_LIST_LIMIT = SlidingWindowLimiter(30)
+
+
+def _device_request(view: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "object": "device_request",
+        "client_id": view["client_id"],
+        # Reported by the device; nothing verified it.
+        "device_name": view["client_name"],
+        "verified": False,
+        # The caller's address; empty behind a tunnel, which hides it.
+        "source_ip": view["source"],
+        "via_tunnel": not view["source"],
+        "created_at": view["created_at"],
+        "expires_at": view["expires_at"],
+        "age": view["age"],
+        "expires_in": view["expires_in"],
+    }
+
+
+async def _list_devices(request: web.Request) -> web.Response:
+    """The pairing requests waiting for the owner, oldest first, each with the code the
+    device shows, so the owner can compare it and answer in one press."""
+    subject = str(request["user"])
+    if _LIST_LIMIT.limited(subject):
+        return _error(429, "rate_limited", "too many attempts; wait a minute")
+    try:
+        waiting = await asyncio.to_thread(
+            lambda: la.gateway_local_authorization().pending_device_requests(caller=subject)
+        )
+    except Exception:
+        return _error(*_UNAVAILABLE)
+    if family := pair.claim_family(request):
+        # A one-scan pair session sees only what its own claim may answer.
+        waiting = [
+            v
+            for v in waiting
+            if not pair.claims.refusal(family, created_at=v["created_at"], source=v["source"])
+        ]
+    data = [{**_device_request(v), "user_code": v["user_code"]} for v in waiting]
+    return web.json_response(
+        {
+            "object": "list",
+            "data": data,
+            "first_id": data[0]["user_code"] if data else None,
+            "last_id": data[-1]["user_code"] if data else None,
+            "has_more": False,
+        }
+    )
+
+
+async def lookup_device(request: web.Request) -> web.Response:
+    """Who asks, for the pairing request that shows ``?user_code=``. Changes nothing, so the
+    owner can read the device name, address and age before pressing Approve. Same owner
+    gate, same rate limit and same uniform 404 as :func:`approve_device`."""
+    if (
+        denied := await _host_owner_refusal(request, "crew_api.device_approvals.lookup")
+    ) is not None:
+        return denied
+    if "user_code" not in request.query:
+        return await _list_devices(request)
+    code = request.query.get("user_code", "")
+    if not 0 < len(code) <= 32:
+        return _error(400, "invalid_request", "user_code is required")
+    subject = str(request["user"])
+    if _APPROVAL_LIMIT.limited(subject):
+        return _error(429, "rate_limited", "too many attempts; wait a minute")
+    try:
+        view = await asyncio.to_thread(
+            lambda: la.gateway_local_authorization().device_request_for_owner(code, caller=subject)
+        )
+    except la.UnknownRequest:
+        return _error(404, "not_found", "no such pairing request, or it has expired")
+    except Exception:
+        return _error(*_UNAVAILABLE)
+    if family := pair.claim_family(request):
+        # A one-scan pair session sees only the request its own claim may answer.
+        if refusal := pair.claims.refusal(
+            family, created_at=view["created_at"], source=view["source"]
+        ):
+            return _pair_refusal(refusal)
+    return web.json_response(_device_request(view))
+
+
+async def approve_device(request: web.Request) -> web.Response:
+    """Answer the pairing request that shows ``user_code``: approve it, or deny it with
+    ``"approve": false``. The owner reads the code off the device, so a code that is
+    unknown, expired or already answered is the same 404."""
+    if (
+        denied := await _host_owner_refusal(request, "crew_api.device_approvals.decide")
+    ) is not None:
+        return denied
+    if request.content_length is None or request.content_length > _BODY_MAX:
+        return _error(400, "invalid_request", "the body is missing its length or too large")
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    approve = body.get("approve", True) if isinstance(body, dict) else None
+    code = body.get("user_code") if isinstance(body, dict) else None
+    if not (isinstance(code, str) and 0 < len(code) <= 32 and isinstance(approve, bool)):
+        return _error(400, "invalid_request", "user_code is required and approve must be a boolean")
+    subject = str(request["user"])
+    if _APPROVAL_LIMIT.limited(subject):
+        return _error(429, "rate_limited", "too many attempts; wait a minute")
+    family = pair.claim_family(request)
+    spent = False
+    if family:
+        # A one-scan pair session answers ONE request: the one made soon after its link
+        # redeemed, from the address that redeemed it. Everything else is refused here,
+        # whether or not the claim is still unspent.
+        try:
+            seen = await asyncio.to_thread(
+                lambda: la.gateway_local_authorization().device_request_for_owner(
+                    code, caller=subject
+                )
+            )
+        except la.UnknownRequest:
+            return _error(404, "not_found", "no such pairing request, or it has expired")
+        except Exception:
+            return _error(*_UNAVAILABLE)
+        if refusal := pair.claims.refusal(
+            family, created_at=seen["created_at"], source=seen["source"]
+        ):
+            await asyncio.to_thread(_audit_pair, subject, "refused", refusal, seen)
+            return _pair_refusal(refusal)
+        if approve:
+            if not pair.claims.spend(family):
+                return _pair_refusal(pair.SPENT)
+            spent = True
+    try:
+        view = await asyncio.to_thread(
+            lambda: la.gateway_local_authorization().decide_device(code, approve, caller=subject)
+        )
+    except la.UnknownRequest:
+        if spent:
+            pair.claims.unspend(family)
+        return _error(404, "not_found", "no such pairing request, or it has expired")
+    except Exception:
+        if spent:
+            pair.claims.unspend(family)
+        return _error(*_UNAVAILABLE)
+    if spent:
+        await asyncio.to_thread(_audit_pair, subject, "approved", "", view)
+    return web.json_response(
+        {
+            "object": "device_approval",
+            "status": view["status"],
+            "client_id": view["client_id"],
+            # Reported by the device; nothing verified it.
+            "device_name": view["client_name"],
+            "verified": False,
+            "source_ip": view["source"],
+            "created_at": view["created_at"],
+            "expires_at": view["expires_at"],
+        }
+    )
 
 
 async def decide_grant_request(request: web.Request) -> web.Response:

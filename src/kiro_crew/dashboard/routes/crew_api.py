@@ -70,6 +70,14 @@ def register(app: web.Application) -> None:
         owner_route(crew_api_grant_requests.decide_grant_request, "crew_api.grant_requests.decide"),
     )
     app.router.add_get(
+        "/v1/crew/owner/device-approvals",
+        owner_route(crew_api_grant_requests.lookup_device, "crew_api.device_approvals.lookup"),
+    )
+    app.router.add_post(
+        "/v1/crew/owner/device-approvals",
+        owner_route(crew_api_grant_requests.approve_device, "crew_api.device_approvals.decide"),
+    )
+    app.router.add_get(
         "/v1/crew/owner/approvals",
         owner_route(crew_api_approvals.list_approvals, "crew_api.approvals.list"),
     )

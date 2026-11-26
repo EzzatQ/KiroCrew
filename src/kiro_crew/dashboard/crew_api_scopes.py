@@ -163,6 +163,8 @@ ROUTES: Final[Mapping[tuple[str, str], RouteScope]] = {
     ("GET", "/v1/crew/owner/grant-requests"): _own("grants:manage"),
     ("GET", "/v1/crew/owner/grant-requests/{request_id}"): _own("grants:manage"),
     ("POST", "/v1/crew/owner/grant-requests/{request_id}/decision"): _own("grants:manage"),
+    ("GET", "/v1/crew/owner/device-approvals"): _own("grants:manage"),
+    ("POST", "/v1/crew/owner/device-approvals"): _own("grants:manage"),
     ("GET", "/v1/crew/owner/approvals"): _own("approvals:answer"),
     ("GET", "/v1/crew/owner/approvals/{approval_id}"): _own("approvals:answer"),
     ("POST", "/v1/crew/owner/approvals/{approval_id}/decision"): _own("approvals:answer"),

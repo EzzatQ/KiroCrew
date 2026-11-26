@@ -231,6 +231,43 @@ def dashboard_origin(url: str) -> str:
     return f"{scheme}://{host}:{port}" if port else f"{scheme}://{host}"
 
 
+def cors_external_origin() -> str:
+    """The one origin ``KIROCREW_CORS_ORIGINS`` names, or ``""`` when it names none or several.
+
+    Fallback for a sign-in link when ``dashboard.url`` is unset. The operator already
+    listed that origin as trusted for this dashboard, so using it adds no new trust. It
+    stays deliberately narrow: exactly one entry, with an explicit ``http://`` or
+    ``https://`` scheme, a concrete, non-loopback host (no wildcard; a phone cannot open the host's own
+    loopback) and no path, query or userinfo.
+    Anything else returns ``""`` so the caller reports the setting to add instead of
+    guessing. ``KIROCREW_BIND`` is never used: it names an interface, not the address,
+    scheme or name a phone reaches.
+    """
+    entries = [e.strip() for e in os.environ.get("KIROCREW_CORS_ORIGINS", "").split(",")]
+    entries = [e for e in entries if e]
+    if len(entries) != 1:
+        return ""
+    entry = entries[0]
+    if not entry.lower().startswith(("http://", "https://")) or "*" in entry:
+        return ""
+    try:
+        parsed = urlparse(entry)
+        _ = parsed.port
+    except ValueError:
+        return ""
+    if parsed.path not in ("", "/") or parsed.query or parsed.fragment or parsed.username:
+        return ""
+    host = (parsed.hostname or "").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return ""
+    try:
+        if ipaddress.ip_address(host).is_loopback:
+            return ""
+    except ValueError:
+        pass
+    return dashboard_origin(entry)
+
+
 def dashboard_link_origin(dashboard_url: str, tunnel_url: str = "") -> str:
     """Browser-facing origin for a Slack->dashboard link, or ``""``.
 

@@ -60,6 +60,7 @@ describe('SecurityPanel owners', () => {
       'SecurityPanelBodyFields.tsx',
       'SecurityPanelConfigPending.tsx',
       'SecurityPanelDeniedCommands.tsx',
+      'SecurityPanelDevices.tsx',
       'SecurityPanelGovernance.tsx',
       'SecurityPanelLayers.tsx',
       'SecurityPanelPosture.tsx',

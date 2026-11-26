@@ -1160,14 +1160,17 @@ async def test_a_request_that_came_through_an_entry_gets_404(
     if audit_fails:
         audit.log_api_access.side_effect = OSError("audit unavailable")
     forwarded = {"X-Forwarded-For": "203.0.113.7"}
+    # The metadata and a device's own tokens are served through a tunnel; these four are
+    # for an app on this machine, or a device grant's token for the revoke.
     for method, path in (
-        ("GET", "/.well-known/oauth-authorization-server"),
         ("GET", "/oauth/authorize"),
         ("POST", "/oauth/token"),
         ("POST", "/oauth/revoke"),
     ):
         audit.reset_mock()
-        answer = await client.request(method, path, params=ASK, headers=forwarded)
+        answer = await client.request(
+            method, path, params=ASK, headers=forwarded, data={"token": "not-a-device-token"}
+        )
         assert answer.status == 404, path
         assert (await answer.json())["error"] == "not_found"
         audit.log_api_access.assert_called_once_with(
@@ -1177,7 +1180,7 @@ async def test_a_request_that_came_through_an_entry_gets_404(
             source="local-authorization",
             resources="not-direct-local",
         )
-    assert len(audit_threads) == 4
+    assert len(audit_threads) == 3
     assert all(thread is not loop_thread for thread in audit_threads)
     assert store.pending() == []
 

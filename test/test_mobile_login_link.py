@@ -7,6 +7,7 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
 from aiohttp import web
 
 from kiro_crew.dashboard.handlers import _shared, auth_mobile
@@ -91,7 +92,59 @@ def test_mobile_link_refuses_missing_external_origin():
     assert json.loads(response.text) == {
         "error": "external_origin_unavailable",
         "code": "external_origin_unavailable",
+        "setting": "dashboard.url",
     }
+
+
+def test_mobile_link_derives_origin_from_a_single_explicit_cors_origin(monkeypatch):
+    monkeypatch.setenv("KIROCREW_CORS_ORIGINS", "http://192.168.1.20:7777")
+
+    response = _call(_request(cookie_token=_caller_token()))
+
+    assert response.status == 200
+    assert json.loads(response.text)["url"].startswith("http://192.168.1.20:7777?token=")
+
+
+def test_mobile_link_configured_url_wins_over_cors_origin(monkeypatch):
+    monkeypatch.setenv("KIROCREW_CORS_ORIGINS", "http://192.168.1.20:7777")
+
+    response = _call(
+        _request(dashboard_url="https://dashboard.example", cookie_token=_caller_token())
+    )
+
+    assert json.loads(response.text)["url"].startswith("https://dashboard.example?token=")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "*",
+        "http://*.example.com",
+        "192.168.1.20:7777",  # no scheme: would have to be guessed
+        "http://192.168.1.20:7777,http://10.0.0.5:7777",  # several: would have to pick one
+        "http://192.168.1.20:7777/path",
+        "http://user@192.168.1.20:7777",
+        "ftp://192.168.1.20",
+        "http://192.168.1.20:notaport",
+        "http://localhost:5173",  # the phone cannot open its own loopback
+        "http://127.0.0.1:7777",
+        "http://[::1]:7777",
+    ],
+)
+def test_mobile_link_does_not_guess_an_origin_from_cors_origins(monkeypatch, value):
+    monkeypatch.setenv("KIROCREW_CORS_ORIGINS", value)
+
+    response = _call(_request(cookie_token=_caller_token()))
+
+    assert response.status == 409
+    assert json.loads(response.text)["setting"] == "dashboard.url"
+
+
+def test_mobile_link_ignores_kirocrew_bind(monkeypatch):
+    monkeypatch.delenv("KIROCREW_CORS_ORIGINS", raising=False)
+    monkeypatch.setenv("KIROCREW_BIND", "192.168.1.20")
+
+    assert _call(_request(cookie_token=_caller_token())).status == 409
 
 
 def test_mobile_link_refuses_app_scoped_token():

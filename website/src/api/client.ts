@@ -162,6 +162,10 @@ export type {
 export type {
   RemoteControlState,
   TailnetStatusData,
+  DeviceApproval,
+  DeviceRequest,
+  PendingDeviceRequest,
+  DeviceGrant,
   TailnetMobileStep,
   TailnetMobileData,
   TailnetMobileMutation,
@@ -419,6 +423,36 @@ function postAuthExpiredToHub(): boolean {
   return true
 }
 
+// One reauth ask per document, for the same reason as the hub hand-off above: every
+// 403 of every background poll would otherwise ask the app again.
+let _appReauthPosted = false
+
+interface KirocrewAuthBridge {
+  postMessage(message: { type: 'reauth' }): void
+}
+
+/** Ask the native iOS shell to open a fresh dashboard session (its device grant
+ *  re-exchanges at /api/auth/device-session), at most once per document. The shell
+ *  exposes a WKScriptMessageHandler named `kirocrewAuth`; a plain browser has none.
+ *  Returns true when the shell was asked, so the caller skips the paste-token banner.
+ *  There is no web logout call to bridge: the dashboard has no sign-out button. */
+function postReauthToApp(): boolean {
+  const bridge = (
+    window as unknown as {
+      webkit?: { messageHandlers?: { kirocrewAuth?: KirocrewAuthBridge } }
+    }
+  ).webkit?.messageHandlers?.kirocrewAuth
+  if (!bridge) return false
+  if (_appReauthPosted) return true
+  try {
+    bridge.postMessage({ type: 'reauth' })
+  } catch {
+    return false
+  }
+  _appReauthPosted = true
+  return true
+}
+
 export function attemptSilentRefresh(): Promise<boolean> {
   return refreshOnce().then((res) => {
     if (res.ok) {
@@ -437,6 +471,7 @@ export function attemptSilentRefresh(): Promise<boolean> {
 export function __resetAuthRecoveryStateForTests(): void {
   _silentRefreshExhausted = false
   _embeddedHandoffPosted = false
+  _appReauthPosted = false
   _sessionExpiredShown = false
   _staleOwnerBanner = false
   callerMayHaveChanged()
@@ -863,10 +898,11 @@ export function checkSessionExpired(r: Response): Response {
     if (!_silentRefreshExhausted) {
       void attemptSilentRefresh().then((ok) => {
         if (ok) removeAuthBanner()
-        else if (_silentRefreshExhausted) showSessionExpiredBanner()
+        else if (_silentRefreshExhausted && !postReauthToApp()) showSessionExpiredBanner()
       })
       return r
     }
+    if (postReauthToApp()) return r
     showSessionExpiredBanner()
   }
   return r

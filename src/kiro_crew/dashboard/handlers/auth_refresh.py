@@ -60,6 +60,9 @@ from kiro_crew.dashboard.token_auth import (
 from kiro_crew.sel import sel as _sel_fn
 from kiro_crew.shared_crew.identity import viewer_principal
 
+#: A device grant's id starts with this and is the family of every cookie chain it opened.
+DEVICE_GRANT_ID_PREFIX = "grt_"
+
 logger = logging.getLogger(__name__)
 
 
@@ -712,6 +715,32 @@ async def api_auth_refresh(request: web.Request) -> web.Response:
     # this rotation mints.
     carried_family = refresh_token_family(refresh_token)
     carried_ancestors = refresh_token_ancestors(refresh_token)
+    if carried_family.startswith(DEVICE_GRANT_ID_PREFIX):
+        # A device's cookie chain lives as long as its grant: revoked, expired or idle
+        # past the limit, it stops rotating. Before the family check below, which must
+        # stay the last await before the mint.
+        try:
+            from kiro_crew.dashboard import local_authorization as _la
+
+            device_ok = await asyncio.to_thread(
+                lambda: _la.gateway_local_authorization().touch_device_session(carried_family)
+            )
+        except (OSError, ValueError, KeyError, TypeError):
+            _audit(user_id, "refresh_token_use", "device_grant_unreadable", chain_id)
+            return web.json_response(
+                {
+                    "error": "The device grant could not be read.",
+                    "code": "refresh_state_unavailable",
+                },
+                status=503,
+            )
+        if not device_ok:
+            _audit(user_id, "refresh_token_use", "device_grant_ended", chain_id)
+            resp = web.json_response(
+                {"error": "invalid_refresh", "code": "invalid_refresh"}, status=401
+            )
+            _clear_refresh_cookie(resp, request)
+            return resp
     if carried_family or carried_ancestors:
         # Checked again here, after the peer-resolution await above: the owner may have
         # ended the family since validation, and nothing between this check and the mint

@@ -81,6 +81,14 @@ ALLOWED_WHILE_CLOSED: dict[str, frozenset[str]] = {
     # fresh. Without them the status call above is refused by token auth.
     "/api/auth/me": _GET,
     "/api/auth/refresh": _POST,
+    # A paired phone keeps its dashboard session and its refresh through a lapsed kiro
+    # login, as a browser's cookie chain does: the exchange and the two grants it needs.
+    # The gate sees a path, not a grant type, so ``/oauth/token`` is open here for every
+    # grant type and the route itself refuses all but the device ones while the gate is
+    # closed (routes/local_authorization.py).
+    "/api/auth/device-session": _POST,
+    "/oauth/token": _POST,
+    "/oauth/revoke": _POST,
     # Session revocation stays reachable: a lost kiro login must not stop a
     # user (or `kirocrew logout`, loopback plus the local secret) from ending a
     # dashboard session that refresh above could otherwise keep renewing.

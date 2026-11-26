@@ -1,0 +1,14 @@
+{
+  "appId": "com.amazon.kiro.crew",
+  "appName": "Kiro Crew",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0d0f12"
+  },
+  "server": {
+    "allowNavigation": [
+      "*"
+    ]
+  }
+}

@@ -334,7 +334,10 @@
     "relay_remote_control_off": "此 Crew 的远程访问已关闭",
     "relay_remote_control_off_detail": "Crew 的所有者关闭了远程访问。只有所有者能在 Crew 所在的电脑上重新开启。",
     "relay_remote_control_off_waits": "重新开启后，此页面会自动重新连接。",
-    "terminal_owner_only": "只有 Crew 所有者可以使用终端。"
+    "terminal_owner_only": "只有 Crew 所有者可以使用终端。",
+    "signed_out_title": "此设备尚未登录",
+    "signed_out_body": "登录后即可查看你的会话。",
+    "signed_out_signin": "登录"
   },
   "appSdk": {
     "chatSession": {
@@ -6973,7 +6976,10 @@
       "composer_action_footer_host": "{{productName}} 检查了草稿。{{app}} 仍然看不到它。",
       "composer_action_needs_empty": "{{app}} 只能插入到空消息中。请先清空草稿。",
       "composer_action_would_resolve": "{{app}} 的文本以 /、! 或 @ 开头，或包含 $skill、文件或图片，因此会被执行而不是作为文本发送。没有插入。",
-      "composer_action_footer": "{{app}} 看不到你的草稿。它的文字按原样插入，是否发送由你决定。"
+      "composer_action_footer": "{{app}} 看不到你的草稿。它的文字按原样插入，是否发送由你决定。",
+      "phone_options": "选项",
+      "phone_options_hide": "隐藏选项",
+      "phone_options_desc": "目标、信任级别、Conductor、AI 辅助、智能体和模型"
     },
     "chatPane": {
       "agent_list": "代理列表",

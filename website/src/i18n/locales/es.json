@@ -368,7 +368,10 @@
     "relay_remote_control_off": "El acceso remoto a esta Crew está desactivado",
     "relay_remote_control_off_detail": "El propietario de la Crew desactivó el acceso remoto. Solo él puede volver a activarlo, desde el equipo de la Crew.",
     "relay_remote_control_off_waits": "Esta página se volverá a conectar sola cuando se active de nuevo.",
-    "terminal_owner_only": "Solo el propietario de la Crew puede usar el terminal."
+    "terminal_owner_only": "Solo el propietario de la Crew puede usar el terminal.",
+    "signed_out_title": "No has iniciado sesión en este dispositivo",
+    "signed_out_body": "Inicia sesión para ver tus sesiones.",
+    "signed_out_signin": "Iniciar sesión"
   },
   "appSdk": {
     "chatSession": {
@@ -7349,7 +7352,10 @@
       "composer_action_footer_host": "{{productName}} revisó el borrador. {{app}} sigue sin poder verlo.",
       "composer_action_needs_empty": "{{app}} solo puede insertar en un mensaje vacío. Vacía primero el borrador.",
       "composer_action_would_resolve": "El texto de {{app}} empieza por /, ! o @, o contiene un $skill, un archivo o una imagen, así que se ejecutaría en vez de enviarse como texto. No se insertó.",
-      "composer_action_footer": "{{app}} no puede ver tu borrador. Su texto se inserta tal cual y tú decides si lo envías."
+      "composer_action_footer": "{{app}} no puede ver tu borrador. Su texto se inserta tal cual y tú decides si lo envías.",
+      "phone_options": "Opciones",
+      "phone_options_hide": "Ocultar opciones",
+      "phone_options_desc": "Objetivo, nivel de confianza, Conductor, asistencia de IA, agente y modelo"
     },
     "chatPane": {
       "agent_list": "Lista de agentes",

@@ -119,7 +119,7 @@ export function ChatHeaderMenu({ activeSlot, agent, onReveal, onRename, onAutoTi
             <span className="sr-only">, {i18nT('pages.chatPage.session_options')}</span>
           </button>
         ) : (
-          <button data-chat-header-focus className="px-0.5 py-1 rounded-md text-muted hover:text-text cursor-pointer bg-transparent border-none transition-all" aria-label={i18nT('pages.chatPage.session_options')}>
+          <button data-testid="session-options" data-chat-header-focus className="px-0.5 py-1 rounded-md text-muted hover:text-text cursor-pointer bg-transparent border-none transition-all" aria-label={i18nT('pages.chatPage.session_options')}>
             <ChevronDown size={14} />
           </button>
         )}

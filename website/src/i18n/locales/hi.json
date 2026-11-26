@@ -351,7 +351,10 @@
     "relay_remote_control_off": "इस Crew का रिमोट एक्सेस बंद है",
     "relay_remote_control_off_detail": "Crew के मालिक ने रिमोट एक्सेस बंद कर दिया है। केवल वही इसे Crew के कंप्यूटर से फिर से चालू कर सकते हैं।",
     "relay_remote_control_off_waits": "इसके फिर से चालू होते ही यह पेज अपने आप फिर से कनेक्ट हो जाएगा।",
-    "terminal_owner_only": "टर्मिनल सिर्फ़ Crew के मालिक इस्तेमाल कर सकते हैं।"
+    "terminal_owner_only": "टर्मिनल सिर्फ़ Crew के मालिक इस्तेमाल कर सकते हैं।",
+    "signed_out_title": "आप इस डिवाइस पर साइन इन नहीं हैं",
+    "signed_out_body": "अपने सत्र देखने के लिए साइन इन करें।",
+    "signed_out_signin": "साइन इन करें"
   },
   "appSdk": {
     "chatSession": {
@@ -7161,7 +7164,10 @@
       "composer_action_footer_host": "{{productName}} ने ड्राफ़्ट जाँचा। {{app}} अब भी उसे नहीं देख सकता।",
       "composer_action_needs_empty": "{{app}} केवल खाली संदेश में डाल सकता है। पहले ड्राफ़्ट खाली करो।",
       "composer_action_would_resolve": "{{app}} का टेक्स्ट /, ! या @ से शुरू होता है, या उसमें $skill, फ़ाइल या इमेज है, इसलिए वह टेक्स्ट की तरह भेजे जाने के बजाय चलता। उसे नहीं डाला गया।",
-      "composer_action_footer": "{{app}} तुम्हारा ड्राफ़्ट नहीं देख सकता। उसका टेक्स्ट जैसा है वैसा डाला जाता है, और भेजना तुम तय करते हो।"
+      "composer_action_footer": "{{app}} तुम्हारा ड्राफ़्ट नहीं देख सकता। उसका टेक्स्ट जैसा है वैसा डाला जाता है, और भेजना तुम तय करते हो।",
+      "phone_options": "विकल्प",
+      "phone_options_hide": "विकल्प छिपाएँ",
+      "phone_options_desc": "लक्ष्य, भरोसे का स्तर, Conductor, AI सहायता, एजेंट और मॉडल"
     },
     "chatPane": {
       "agent_list": "एजेंट सूची",

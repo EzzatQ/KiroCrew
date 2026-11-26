@@ -129,7 +129,7 @@ export function SessionControlChips({ sessionControls, shelfCompact, onSessionCo
       /* No `font-mono`: same reasoning as the agent chip below — a
          control label is a label, not code, and pinning `var(--mono)`
          would make the shelf ignore the user's Font Family setting. */
-      className={`inline-flex items-center gap-1.5 h-7 min-w-0 text-[12px] px-2.5 rounded-md bg-transparent hover:bg-[color-mix(in_srgb,var(--bg-elevated)_84%,var(--text))] transition-colors border-none cursor-pointer ${
+      className={`mc-touch-min inline-flex items-center gap-1.5 h-7 min-w-0 text-[12px] px-2.5 rounded-md bg-transparent hover:bg-[color-mix(in_srgb,var(--bg-elevated)_84%,var(--text))] transition-colors border-none cursor-pointer ${
         /* Open wins, so the chip you are pointing at always reads as
            the active one; otherwise the app's own state colours it. */
         sc.active
@@ -202,7 +202,7 @@ export function AgentChip({ agentName, agentLabel, agentIsInheritedDefault, agen
     : null
   return (
     <button
-      className={`inline-flex items-center gap-1.5 h-7 min-w-0 text-[12px] px-2.5 rounded-md bg-transparent hover:bg-[color-mix(in_srgb,var(--bg-elevated)_84%,var(--text))] transition-colors border-none cursor-pointer disabled:cursor-not-allowed disabled:hover:bg-transparent ${agentSource === 'package' ? 'text-[var(--aim)] hover:text-[var(--aim)]' : 'text-muted hover:text-text disabled:hover:text-muted'}`}
+      className={`mc-touch-min inline-flex items-center gap-1.5 h-7 min-w-0 text-[12px] px-2.5 rounded-md bg-transparent hover:bg-[color-mix(in_srgb,var(--bg-elevated)_84%,var(--text))] transition-colors border-none cursor-pointer disabled:cursor-not-allowed disabled:hover:bg-transparent ${agentSource === 'package' ? 'text-[var(--aim)] hover:text-[var(--aim)]' : 'text-muted hover:text-text disabled:hover:text-muted'}`}
       {...press}
       disabled={isRunning}
       title={cycleLine ? `${label}\n${cycleLine}` : label}
@@ -336,7 +336,7 @@ export function ContextUsageControl({ contextPct, contextUnknown = false, contex
   <div className="relative flex items-center">
     <PopoverTrigger asChild>
     <button
-      className={`inline-flex items-center h-7 px-2.5 rounded-md transition-colors border-none cursor-pointer ${ctxPopoverOpen ? 'bg-[color-mix(in_srgb,var(--bg-elevated)_84%,var(--text))]' : 'bg-transparent hover:bg-[color-mix(in_srgb,var(--bg-elevated)_84%,var(--text))]'}`}
+      className={`mc-touch-min inline-flex items-center h-7 px-2.5 rounded-md transition-colors border-none cursor-pointer ${ctxPopoverOpen ? 'bg-[color-mix(in_srgb,var(--bg-elevated)_84%,var(--text))]' : 'bg-transparent hover:bg-[color-mix(in_srgb,var(--bg-elevated)_84%,var(--text))]'}`}
       {...press}
       // The press already toggled the card; cancelling the click keeps Radix's
       // own click toggle from flipping it back.
@@ -511,7 +511,7 @@ export function ModelChip({ modelName, modelIsJevRouted, modelIsInheritedDefault
   })
   return (
   <button
-    className="inline-flex items-center gap-1.5 h-7 min-w-0 text-[12px] text-muted hover:text-text px-2 rounded-md bg-transparent hover:bg-[color-mix(in_srgb,var(--bg-elevated)_84%,var(--text))] transition-colors border-none cursor-pointer disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted"
+    className="mc-touch-min inline-flex items-center gap-1.5 h-7 min-w-0 text-[12px] text-muted hover:text-text px-2 rounded-md bg-transparent hover:bg-[color-mix(in_srgb,var(--bg-elevated)_84%,var(--text))] transition-colors border-none cursor-pointer disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted"
     onPointerDown={e => {
       // Read before the press moves focus to the chip: the picker hands focus
       // back to the composer on close only when the composer had it. Pointer-

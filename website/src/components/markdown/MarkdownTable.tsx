@@ -182,7 +182,7 @@ export function MarkdownTable({ node, children }: { node?: HastElement; children
         // A narrowed fixed-layout column clips its content instead of painting
         // it over the neighbour; a header label ellipsizes (it never wraps).
         ? 'min-w-full border-collapse text-sm [overflow-wrap:normal] [word-break:normal] [&_tbody>tr:last-child>td]:border-b-0 [&_th]:overflow-hidden [&_th]:text-ellipsis [&_td]:overflow-hidden'
-        : 'min-w-full border-collapse text-sm [overflow-wrap:normal] [word-break:normal] [&_tbody>tr:last-child>td]:border-b-0'}>{columns.colgroup}{children}</table>{columns.grips}</div>
+        : 'min-w-full border-collapse text-sm [overflow-wrap:normal] [word-break:normal] [&_tbody>tr:last-child>td]:border-b-0 [@media(pointer:coarse)]:[&_th]:min-w-[7rem] [@media(pointer:coarse)]:[&_td]:min-w-[7rem]'}>{columns.colgroup}{children}</table>{columns.grips}</div>
       <div className={`mt-0.5 flex items-center justify-end gap-1 select-none opacity-0 group-hover/table:opacity-100 group-focus-within/table:opacity-100 transition-opacity ${HOVER_NONE_ACTIONS_ROW_CLS}`}>
         {/* Shown only where a table can widen (index.css: a top-level
             assistant table in an unbordered transcript bubble); everywhere

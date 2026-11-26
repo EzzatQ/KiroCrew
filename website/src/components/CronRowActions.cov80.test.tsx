@@ -200,3 +200,27 @@ describe('CronRowActions', () => {
     expect(screen.getByText('New folder')).toBeInTheDocument()
   })
 })
+
+describe('CronRowActions Delete on a phone', () => {
+  const open = () => fireEvent.keyDown(screen.getByLabelText('Actions'), { key: 'Enter' })
+
+  it('has no Delete item unless the row hands over an arm callback', async () => {
+    setup()
+    await screen.findByText('Run Now')
+    expect(screen.queryByTestId('cron-row-delete')).toBeNull()
+  })
+
+  it('arms the row Delete from the menu, without deleting anything itself', async () => {
+    const onArmDelete = vi.fn()
+    render(
+      <CronRowActions
+        job={job()} folders={FOLDERS} running={false} cancelling={false}
+        onRun={vi.fn()} onCancelRun={vi.fn()} onOpenInChat={vi.fn()} onToggleEnabled={vi.fn()}
+        onToggleStrict={vi.fn()} onMove={vi.fn()} onNewFolder={vi.fn()} onArmDelete={onArmDelete}
+      />,
+    )
+    open()
+    fireEvent.click(await screen.findByTestId('cron-row-delete'))
+    expect(onArmDelete).toHaveBeenCalledTimes(1)
+  })
+})

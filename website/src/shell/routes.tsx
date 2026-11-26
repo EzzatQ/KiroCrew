@@ -11,6 +11,8 @@ import { lazyRetry } from '../components/lazyRetry'
 import { EmptyState } from '../components/ui'
 import { useViewerIsNotOwner } from '../hooks/sharedCrew/useSharedCrew'
 import { isBottomTerminalOpen, openBottomTerminal } from '../hooks/useBottomTerminal'
+import { useIsMobile } from '../hooks/useIsMobile'
+import TerminalPage from '../pages/TerminalPage'
 import { i18nT } from '../i18n/t'
 
 /**
@@ -57,17 +59,20 @@ export function TasksRedirect() { const { search } = useLocation(); return <Navi
 export function ChatRedirect() { const { search } = useLocation(); return <Navigate to={'/chat' + search} replace /> }
 export function OrchestratedRedirect() { const { slug } = useParams(); const { search } = useLocation(); return <Navigate to={`/chat${slug ? '/' + slug : ''}${search}`} replace /> }
 
-/** `/terminal`: the Terminal is the docked panel, not a page. The owner lands on
- *  chat with the panel open; a teammate, whom the Terminal is never offered to,
- *  gets a short page saying so instead of being dropped on a chat with no word.
- *  Nothing happens until the owner check answers, so neither case flashes. */
+/** `/terminal`: on desktop the Terminal is the docked panel, not a page. The
+ *  owner lands on chat with the panel open; a teammate, whom the Terminal is
+ *  never offered to, gets a short page saying so instead of being dropped on a
+ *  chat with no word. On a phone there is no room for a dock beside the chat, so
+ *  the owner gets the terminal as a page (`TerminalPage`). Nothing happens until
+ *  the owner check answers, so no case flashes. */
 export function TerminalRoute() {
   const { search } = useLocation()
+  const isMobile = useIsMobile()
   const { notOwner, owner, failed } = useViewerIsNotOwner()
   const opens = !notOwner && (owner || failed)
   useEffect(() => {
-    if (opens && !isBottomTerminalOpen()) openBottomTerminal()
-  }, [opens])
+    if (opens && !isMobile && !isBottomTerminalOpen()) openBottomTerminal()
+  }, [opens, isMobile])
   if (notOwner) {
     return (
       <div className="flex-1 flex items-center justify-center p-6" data-testid="terminal-owner-only">
@@ -80,5 +85,6 @@ export function TerminalRoute() {
     )
   }
   if (!opens) return null
+  if (isMobile) return <TerminalPage />
   return <Navigate to={'/chat' + search} replace />
 }

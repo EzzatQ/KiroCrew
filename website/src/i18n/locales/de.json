@@ -351,7 +351,10 @@
     "relay_remote_control_off": "Der Fernzugriff auf diese Crew ist ausgeschaltet",
     "relay_remote_control_off_detail": "Der Besitzer der Crew hat den Fernzugriff ausgeschaltet. Nur er kann ihn wieder einschalten, am Computer der Crew.",
     "relay_remote_control_off_waits": "Diese Seite verbindet sich von selbst neu, sobald er wieder eingeschaltet ist.",
-    "terminal_owner_only": "Nur der Besitzer der Crew kann das Terminal nutzen."
+    "terminal_owner_only": "Nur der Besitzer der Crew kann das Terminal nutzen.",
+    "signed_out_title": "Du bist auf diesem Gerät nicht angemeldet",
+    "signed_out_body": "Melde dich an, um deine Sitzungen zu sehen.",
+    "signed_out_signin": "Anmelden"
   },
   "appSdk": {
     "chatSession": {
@@ -7161,7 +7164,10 @@
       "composer_action_footer_host": "{{productName}} hat den Entwurf geprüft. {{app}} sieht ihn weiterhin nicht.",
       "composer_action_needs_empty": "{{app}} kann nur in eine leere Nachricht einfügen. Leere zuerst den Entwurf.",
       "composer_action_would_resolve": "Der Text von {{app}} beginnt mit /, ! oder @ oder enthält einen $skill, eine Datei oder ein Bild und würde daher ausgeführt statt als Text gesendet. Er wurde nicht eingefügt.",
-      "composer_action_footer": "{{app}} kann deinen Entwurf nicht sehen. Sein Text wird wörtlich eingefügt, und du entscheidest, ob du ihn sendest."
+      "composer_action_footer": "{{app}} kann deinen Entwurf nicht sehen. Sein Text wird wörtlich eingefügt, und du entscheidest, ob du ihn sendest.",
+      "phone_options": "Optionen",
+      "phone_options_hide": "Optionen ausblenden",
+      "phone_options_desc": "Ziel, Vertrauensstufe, Conductor, KI-Unterstützung, Agent und Modell"
     },
     "chatPane": {
       "agent_list": "Agenten-Liste",

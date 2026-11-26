@@ -153,7 +153,14 @@ export default function NotificationsPage() {
           the feed/detail to the sliver left under the grid; the page scrolls as
           a whole instead (the standard page skeleton). */}
       <div ref={scrollRef} className={`px-4 md:px-6 pb-8 flex-1 min-h-0 flex flex-col ${isMobile ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-        <div className="grid gap-3.5 grid-cols-[repeat(auto-fit,minmax(120px,1fr))] mb-4 shrink-0">
+        <div
+          data-testid="notifications-stats"
+          // On a phone the feed is the page: the five counters follow it as one
+          // scrolling row instead of stacking five cards above the first note.
+          className={isMobile
+            ? 'order-last flex gap-2 overflow-x-auto mt-4 shrink-0 [&>*]:min-w-[110px] [&>*]:shrink-0'
+            : 'grid gap-3.5 grid-cols-[repeat(auto-fit,minmax(120px,1fr))] mb-4 shrink-0'}
+        >
           <StatCard label={i18nT('pages.notificationsPage.total')} value={fmtNumber(items.length)} accent />
           <StatCard label={i18nT('pages.notificationsPage.unread')} value={fmtNumber(unread)} />
           <StatCard label={i18nT('pages.notificationsPage.cron')} value={fmtNumber(byCat('cron'))} />

@@ -220,6 +220,26 @@ describe('ComposerDockView', () => {
     expect(handleResumeSession).toHaveBeenLastCalledWith('chat-8-1785440400', 'chat-8-1785440400')
   })
 
+  it('on a touch device swaps "Esc to dismiss" for a Close button that dismisses the suggestions', () => {
+    const real = window.matchMedia
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true, configurable: true,
+      value: (q: string) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false }),
+    })
+    try {
+      const onDismissHistorySuggestions = vi.fn()
+      render(<ComposerDockView {...dockProps({
+        showHistorySuggestions: true, onDismissHistorySuggestions,
+        historySuggestions: [{ key: 's-named', title: 'Named work' }] as never,
+      })} />)
+      expect(screen.queryByText(i18nT('pages.chatPage.esc_to_dismiss'))).toBeNull()
+      fireEvent.click(screen.getByTestId('history-suggestions-dismiss'))
+      expect(onDismissHistorySuggestions).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.defineProperty(window, 'matchMedia', { writable: true, configurable: true, value: real })
+    }
+  })
+
   it('hands the transcript quote jump to the composer, so the staged card jumps like a sent one (#34335)', () => {
     const onJumpToQuote = vi.fn()
     render(<ComposerDockView {...dockProps({ onJumpToQuote })} />)

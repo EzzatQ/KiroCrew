@@ -334,7 +334,10 @@
     "relay_remote_control_off": "この Crew へのリモートアクセスはオフです",
     "relay_remote_control_off_detail": "Crew のオーナーがリモートアクセスをオフにしました。オンに戻せるのはオーナーだけで、Crew のコンピューターから操作します。",
     "relay_remote_control_off_waits": "オンに戻ると、このページは自動的に再接続します。",
-    "terminal_owner_only": "ターミナルを使えるのは Crew のオーナーだけです。"
+    "terminal_owner_only": "ターミナルを使えるのは Crew のオーナーだけです。",
+    "signed_out_title": "このデバイスではサインインしていません",
+    "signed_out_body": "セッションを見るにはサインインしてください。",
+    "signed_out_signin": "サインイン"
   },
   "appSdk": {
     "chatSession": {
@@ -6973,7 +6976,10 @@
       "composer_action_footer_host": "{{productName}} が下書きを確認しました。{{app}} には引き続き見えません。",
       "composer_action_needs_empty": "{{app}} は空のメッセージにのみ挿入できます。先に下書きを空にしてください。",
       "composer_action_would_resolve": "{{app}} のテキストは /、! か @ で始まるか、$skill、ファイル、画像を含むため、テキストとして送られずに実行されます。挿入しませんでした。",
-      "composer_action_footer": "{{app}} は下書きを見られません。テキストはそのまま挿入され、送信するかどうかはあなたが決めます。"
+      "composer_action_footer": "{{app}} は下書きを見られません。テキストはそのまま挿入され、送信するかどうかはあなたが決めます。",
+      "phone_options": "オプション",
+      "phone_options_hide": "オプションを隠す",
+      "phone_options_desc": "目標、信頼レベル、Conductor、AI アシスト、エージェント、モデル"
     },
     "chatPane": {
       "agent_list": "エージェントリスト",

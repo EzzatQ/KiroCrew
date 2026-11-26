@@ -41,7 +41,7 @@ export function AdaptiveMobileRail({ top, apps, secondary, bottom, className, ..
           <div data-testid="mobile-nav-rail-secondary" className={block}>{secondary}</div>
         </div>
       </div>
-      <div className={`${block} pt-1`}>{bottom}</div>
+      <div data-testid="mobile-nav-rail-foot" className={`${block} pt-1 max-h-[40dvh] overflow-y-auto`}>{bottom}</div>
     </nav>
   )
 }

@@ -465,7 +465,7 @@ export function NotificationSheet({ sheet }: { sheet: ReturnType<typeof useNotif
           ref={sheetRef}
           {...leavingProps}
           data-nc-phase={phase}
-          className={`absolute top-0 bottom-0 right-0 ${closing ? 'pointer-events-none' : 'pointer-events-auto'} ${isMobile ? 'w-full' : 'w-[400px]'} flex flex-col isolate`}
+          className={`absolute top-0 bottom-0 right-0 ${closing ? 'pointer-events-none' : 'pointer-events-auto'} ${isMobile ? 'w-full bg-bg' : 'w-[400px]'} flex flex-col isolate`}
           // Serialized from the MotionValue rather than bound through framer:
           // this element is not framer-bound, and `animateDrawer` writes the
           // arrival into the element's own inline style for exactly that
@@ -491,7 +491,7 @@ export function NotificationSheet({ sheet }: { sheet: ReturnType<typeof useNotif
               contrast themselves now. */}
           <div
             aria-hidden="true"
-            className="absolute inset-y-0 -left-20 right-0 -z-10 pointer-events-none bg-black/[.02] backdrop-blur-[2px] [mask-image:linear-gradient(to_right,transparent,black_80px)] [-webkit-mask-image:linear-gradient(to_right,transparent,black_80px)]"
+            className="absolute inset-y-0 -left-20 right-0 -z-10 pointer-events-none bg-black/[.02] backdrop-blur-[2px] max-md:hidden [mask-image:linear-gradient(to_right,transparent,black_80px)] [-webkit-mask-image:linear-gradient(to_right,transparent,black_80px)]"
           />
           <div className="flex-1 min-h-0 px-3 py-2 flex flex-col">
             <NotificationFeed

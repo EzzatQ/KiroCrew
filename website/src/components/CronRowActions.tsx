@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MoreHorizontal, Check, Clock, Pause, Play, MessageSquare, Folder, FolderPlus } from 'lucide-react'
+import { MoreHorizontal, Check, Clock, Pause, Play, MessageSquare, Folder, FolderPlus, Trash2 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
@@ -18,14 +18,15 @@ import { i18nT } from '../i18n/t'
  * horizontal scroll area once cells stopped wrapping. Only the two the user acts
  * on per-glance stay in the row (Run/Cancel, Delete); the rest live here.
  *
- * `Delete` deliberately does NOT move in: it is an arm→Confirm state machine on
- * the row button itself, and a menu that closes on select cannot host the armed
- * state. Folder moves are a SUBMENU rather than a reuse of `CronJobMoveMenu`,
+ * `Delete` stays an arm→Confirm state machine on the row button, which a menu
+ * that closes on select cannot host. On a phone (`onArmDelete`) the row button
+ * is hidden until armed, and this menu's Delete is what arms it: the confirm
+ * still sits on the row, one more tap away. Folder moves are a SUBMENU rather than a reuse of `CronJobMoveMenu`,
  * which is a standalone dropdown and cannot nest.
  */
 export default function CronRowActions({
   job, folders, running, cancelling, onRun, onCancelRun, onOpenInChat, onToggleEnabled,
-  onToggleStrict, onMove, onNewFolder,
+  onToggleStrict, onMove, onNewFolder, onArmDelete,
 }: {
   job: CronJob
   folders: CronFolder[]
@@ -38,6 +39,8 @@ export default function CronRowActions({
   onToggleStrict: () => void
   onMove: (folderId: string) => void
   onNewFolder: (moveTo?: boolean) => Promise<string | undefined> | void
+  /** Phone: arms the row's Delete. Absent on desktop, where the row carries the Delete button. */
+  onArmDelete?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const sortedFolders = [...folders].sort((a, b) => a.order - b.order)
@@ -136,6 +139,16 @@ export default function CronRowActions({
             </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+
+        {onArmDelete && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem data-testid="cron-row-delete" onSelect={onArmDelete}>
+              <Trash2 size={13} className="shrink-0 text-danger" />
+              <span className="text-danger">{i18nT('pages.schedulePage.delete')}</span>
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { OverlayPortal } from '../../components/overlayRoot'
-import { Command, Loader2 } from 'lucide-react'
+import { Command, Loader2, X } from 'lucide-react'
 
 import { useAppDispatch, useAppSelector, useAppStore } from '../../store'
 import { selectSlotsWithLiveLastTs } from '../../store/slotLastTs'
@@ -18,6 +18,7 @@ import { useSimplifiedToolNames } from '../../hooks/useSimplifiedToolNames'
 import { useVisualViewport } from '../../hooks/useVisualViewport'
 import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap'
 import { useTheme } from '../../hooks/useTheme'
+import { useIsTouchDevice } from '../../hooks/useIsTouchDevice'
 import { i18nT } from '../../i18n/t'
 import { useLanguage } from '../../i18n/LanguageProvider'
 
@@ -71,6 +72,9 @@ export default function CommandBarOverlay({
 }) {
   const ime = useImeGuard()
   const vv = useVisualViewport()
+  // No keyboard on a touch device: the Enter / copy keycaps name keys nobody can
+  // press there, and Escape and the backdrop need a visible Close instead.
+  const isTouch = useIsTouchDevice()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const dialogRef = useRef<HTMLDivElement | null>(null)
   // Seeded from what the host caught while this chunk loaded, so keys typed right
@@ -806,6 +810,18 @@ export default function CommandBarOverlay({
               rowCount === 0 ? ' focus-visible:ring-1 focus-visible:ring-border-strong' : ''
             }`}
           />
+          {isTouch && (
+            <button
+              type="button"
+              data-testid="command-bar-close"
+              onClick={onClose}
+              aria-label={i18nT('app.close')}
+              title={i18nT('app.close')}
+              className="mc-touch-min shrink-0 flex items-center justify-center rounded-md border-none bg-transparent text-muted cursor-pointer focus-ring-accent"
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          )}
         </div>
 
         {/* No hand-off: the query typed into the bar above is unsaved — the
@@ -1060,16 +1076,18 @@ export default function CommandBarOverlay({
             ) : (
               <>
                 <span className="truncate">{actionLabel(slots[Math.min(selected, rowCount - 1)])}</span>
-                <span className="shrink-0 px-1 rounded border border-border leading-4">
-                  {ENTER_KEY}
-                </span>
+                {!isTouch && (
+                  <span className="shrink-0 px-1 rounded border border-border leading-4">
+                    {ENTER_KEY}
+                  </span>
+                )}
                 {/* The copy chord, named only while the selected row HAS an address. A
                     gesture with no visible counterpart is one most readers never learn
                     exists, and this footer is already where the surface says what a key
                     does to the highlighted row. Withheld rather than greyed on a row
                     with no address: the hint doubles as the answer to "can this one be
                     copied", which a permanently-present label could not give. */}
-                {copyTarget && (
+                {copyTarget && !isTouch && (
                   <>
                     <span className="shrink-0">{i18nT('apps.commandBar.copy_hint')}</span>
                     <span className="shrink-0 px-1 rounded border border-border leading-4">

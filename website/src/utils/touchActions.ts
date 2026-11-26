@@ -48,7 +48,7 @@ export const HOVER_NONE_ACTIONS_ROW_CLS =
  * paints the whole cell so its extent is visible.
  *
  *   pointer: 28x28 cell, 14px glyph  (glyph pitch 28)
- *   touch:   36x32 cell, 16px glyph  (glyph pitch 36)
+ *   touch:   44x44 cell, 16px glyph  (glyph pitch 44)
  *
  * The leading cell starts ON the text column, so its glyph sits a half-cell
  * in (7px pointer, 10px touch) -- aligned with the cells, not with the text.
@@ -63,16 +63,11 @@ export const HOVER_NONE_ACTIONS_ROW_CLS =
  * would make room but WebKit does not implement it, and a start gutter on the
  * clipping box would tie three host wrappers to this constant's pixel value.
  *
- * The touch cell is wider than it is tall on purpose, the way ChatGPT's is
- * (`touch:w-10 h-8`). Width is what separates NEIGHBOURS: a finger that lands
- * off-centre sideways hits the next action, so the glyph pitch has to carry
- * the safety margin. Height has no neighbour -- above is the message text,
- * below is whitespace -- and touch browsers already snap a near-miss onto the
- * only tappable element nearby, so extra height buys nothing and costs every
- * completed turn 8px. 32px is above WCAG 2.5.8's 24px floor; the 44px
- * convention (`docs/narrow-viewport.md`) was already a miss at the previous
- * 40px square. 36 wide also keeps six actions plus an en-US timestamp on one
- * line at 390pt, which the 40px square did not.
+ * The touch cell is a true 44x44 square: an accessibility client (XCUITest)
+ * reads the element's frame, not an invisible hit-area pseudo-element, and the
+ * 44px convention (`docs/narrow-viewport.md`) is the target the iOS shell tests
+ * against. The row already wraps (`flex-wrap`), so a long row of actions plus a
+ * timestamp drops to a second line rather than clipping.
  *
  * The touch half replaces the padded-and-gapped row shape above, which put
  * 28px of air between glyphs (12+12 padding plus a 4px gap) and pushed the
@@ -88,7 +83,7 @@ export const HOVER_NONE_ACTIONS_ROW_CLS =
  * that carries one keeps `HOVER_NONE_ACTIONS_ROW_CLS`.
  */
 export const ICON_ACTION_ROW_CLS =
-  'gap-x-0 [&_button]:h-7 [&_button]:w-7 [&_button]:p-0 [&_button]:inline-flex [&_button]:items-center [&_button]:justify-center [&_button]:rounded-md [&_button:hover]:bg-bg-hover [@media(hover:none)]:opacity-100 [@media(hover:none)]:flex-wrap [@media(hover:none)]:[&_button]:h-8 [@media(hover:none)]:[&_button]:w-9 [@media(hover:none)]:[&_svg]:h-4 [@media(hover:none)]:[&_svg]:w-4'
+  'gap-x-0 [&_button]:h-7 [&_button]:w-7 [&_button]:p-0 [&_button]:inline-flex [&_button]:items-center [&_button]:justify-center [&_button]:rounded-md [&_button:hover]:bg-bg-hover [@media(hover:none)]:opacity-100 [@media(hover:none)]:flex-wrap [@media(hover:none)]:[&_button]:h-11 [@media(hover:none)]:[&_button]:w-11 [@media(hover:none)]:[&_svg]:h-4 [@media(hover:none)]:[&_svg]:w-4'
 
 export const HOVER_NONE_ACTION_BTN_CLS =
   '[@media(hover:none)]:opacity-100 [@media(hover:none)]:p-2.5 [@media(hover:none)]:[&_svg]:h-5 [@media(hover:none)]:[&_svg]:w-5'

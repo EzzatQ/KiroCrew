@@ -153,7 +153,7 @@ export default function NotificationCard({
             data-notif-dismiss
             aria-label={dismissLabel}
             data-testid={dismissTestId}
-            className={`${dismissVisible ? (settled ? 'opacity-80' : 'opacity-60') : 'opacity-0 group-hover:opacity-50 [@media(hover:none)]:opacity-60'} focus-visible:opacity-100 text-[11px] cursor-pointer hover:!opacity-100 hover:text-danger transition-opacity shrink-0`}
+            className={`${dismissVisible ? (settled ? 'opacity-80' : 'opacity-60') : 'opacity-0 group-hover:opacity-50 [@media(hover:none)]:opacity-60'} mc-touch-min inline-flex items-center justify-center focus-visible:opacity-100 text-[11px] cursor-pointer hover:!opacity-100 hover:text-danger transition-opacity shrink-0`}
             onClick={e => { e?.stopPropagation(); onDismiss(e) }}
           ><X className="lucide-inline" /></Clickable>
         )}

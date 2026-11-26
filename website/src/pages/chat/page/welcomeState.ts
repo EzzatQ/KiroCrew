@@ -59,5 +59,6 @@ export function useWelcomeState({ messages, slotRunning, slotLoading, sendingRef
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [showHistorySuggestions])
-  return { updateHistoryQuery, historySuggestions, isWelcomeState, showHistorySuggestions }
+  const dismissHistorySuggestions = useCallback(() => setHistoryDismissed(true), [])
+  return { updateHistoryQuery, historySuggestions, isWelcomeState, showHistorySuggestions, dismissHistorySuggestions }
 }

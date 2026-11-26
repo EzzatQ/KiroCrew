@@ -161,7 +161,7 @@ export function isUploadFileChord(e: React.KeyboardEvent, ime: { isComposing: (e
   return !!chord && !ime.isComposing(e) && chordMatchesEvent(e, chord, platform)
 }
 
-export function AttachMenu({ plus, onUploadFiles, directFilePicker, fileInputId, openPicker, isMac, touchInput, onScreenshot, collapseMenuRow, typedCommandMenus, onFileSelect, optimizeRow = null, appActionRows = null, stashMenuRows }: {
+export function AttachMenu({ plus, onUploadFiles, directFilePicker, fileInputId, openPicker, isMac, touchInput, onScreenshot, collapseMenuRow, typedCommandMenus, onFileSelect, optimizeRow = null, appActionRows = null, stashMenuRows, touchMin = false }: {
   /** App composer actions (`composerActions.tsx`), a group of their own after
    *  the host's shortcuts so an app's row never sits among the host's. */
   appActionRows?: ReactNode
@@ -183,6 +183,8 @@ export function AttachMenu({ plus, onUploadFiles, directFilePicker, fileInputId,
   onFileSelect: ChatInputProps['onFileSelect']
   /** The prompt-stash rows the "+" menu hosts (null when the stash is off). */
   stashMenuRows?: ReactNode
+  /** Phone composer: grow the "+" button to a real 44px box on a coarse pointer. */
+  touchMin?: boolean
 }) {
   const { plusOpen, setPlusOpen, setSketchOpen, plusWrapRef, plusBtnRef, plusMenuRef, plusRect, togglePlus, openTrigger } = plus
   // The "+" trigger opens its menu on the mouse press (usePressActivation);
@@ -206,7 +208,7 @@ export function AttachMenu({ plus, onUploadFiles, directFilePicker, fileInputId,
             </label>
           ) : (
             <button
-              className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all bg-transparent border-none ${plusOpen ? 'text-text bg-bg-hover' : 'text-muted hover:text-text hover:bg-bg-hover'}`}
+              className={`${touchMin ? 'mc-touch-min ' : ''}w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all bg-transparent border-none ${plusOpen ? 'text-text bg-bg-hover' : 'text-muted hover:text-text hover:bg-bg-hover'}`}
               {...bindPlusPress<HTMLButtonElement>(togglePlus)}
               aria-haspopup="menu"
               aria-expanded={plusOpen}

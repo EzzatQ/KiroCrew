@@ -588,13 +588,13 @@ describe('action footer on touch devices', () => {
     expect(cls).toContain('group-focus-within/msg:opacity-100')
   })
 
-  it('enlarges the actions to 36x32 touch targets where the pointer cannot hover', () => {
+  it('enlarges the actions to 44x44 touch targets where the pointer cannot hover', () => {
     render(<UserMessage content="hello" renderContent={renderContent} />)
     const cls = footer().className
     // Same square-cell shape as the assistant footer, so the two rows share one
     // rhythm on a phone.
-    expect(cls).toContain('[@media(hover:none)]:[&_button]:h-8')
-    expect(cls).toContain('[@media(hover:none)]:[&_button]:w-9')
+    expect(cls).toContain('[@media(hover:none)]:[&_button]:h-11')
+    expect(cls).toContain('[@media(hover:none)]:[&_button]:w-11')
     expect(cls).toContain('gap-x-0')
     expect(cls).toContain('[@media(hover:none)]:[&_svg]:h-4')
     expect(cls).toContain('[@media(hover:none)]:[&_svg]:w-4')

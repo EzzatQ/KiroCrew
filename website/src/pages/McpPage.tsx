@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ContentSkeleton, PageHeader } from '../components/ui'
 import ErrorBoundary from '../components/ErrorBoundary'
 import RestartButton from '../components/RestartButton'
+import { useIsMobile } from '../hooks/useIsMobile'
 import McpTab from './overview/McpTab'
 import { McpStagedEditsProvider } from './connections/mcpStagedEditsContext'
 import { connectionCardHref } from './connections/connectionsLinks'
@@ -27,6 +28,7 @@ const VIEW_PARAM = 'view'
 export default function McpPage({ embedded }: { embedded?: boolean } = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
   const [params, setParams] = useSearchParams()
   const view: McpPageView = params.get(VIEW_PARAM) === 'sharing' ? 'sharing' : 'servers'
   // A selector, not a stack: switching views replaces the history entry.
@@ -50,9 +52,11 @@ export default function McpPage({ embedded }: { embedded?: boolean } = {}) {
 
   return (
     <>
+      {/* On a phone the restart sits after the server list: the top of the page
+          is where a thumb lands first, and Apply & Restart ends running turns. */}
       {embedded
-        ? <div className="mb-4">{restart}</div>
-        : <PageHeader title={t('pages.mcpPage.title')} actions={restart} />}
+        ? (!isMobile && <div className="mb-4">{restart}</div>)
+        : <PageHeader title={t('pages.mcpPage.title')} actions={isMobile ? undefined : restart} />}
       <div className={embedded ? 'min-w-0' : 'px-4 md:px-6 pb-8 overflow-y-auto flex-1 min-h-0'}>
         {/* A Bot's worker gets a server only from that Bot's own abilities
             (docs/architecture/agent-mcp-and-skill-reach.md,
@@ -72,6 +76,7 @@ export default function McpPage({ embedded }: { embedded?: boolean } = {}) {
             </Suspense>
           </ErrorBoundary>
         </McpStagedEditsProvider>
+        {isMobile && <div data-testid="mcp-restart-foot" className="mt-8 border-t border-border pt-4">{restart}</div>}
       </div>
     </>
   )

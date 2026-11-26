@@ -1109,7 +1109,7 @@ const UserMessage = memo(function UserMessage({ content, meta, timestamp: timest
                 <MoreHorizontal size={14} />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[210px]">
+            <DropdownMenuContent data-testid="message-actions-menu" align="end" className="min-w-[210px]">
               {quoteInMore && (
                 <DropdownMenuItem data-testid="quote-message-menu-item" onSelect={quoteShown}>
                   {/* Layout and the touch floor live on this span: the primitive owns its own classes (shadcn/no-restyle). */}

@@ -33,6 +33,14 @@ describe('AdaptiveMobileRail', () => {
     expect(within(scroller).getByRole('separator', { hidden: true })).toBeInTheDocument()
   })
 
+  it('caps the pinned foot at 40% of the viewport and lets it scroll, so a short landscape screen keeps a scroller', () => {
+    renderRail()
+    const foot = screen.getByTestId('mobile-nav-rail-foot')
+    expect(foot.className).toContain('max-h-[40dvh]')
+    expect(foot.className).toContain('overflow-y-auto')
+    expect(foot).toContainElement(screen.getByRole('button', { name: 'Settings' }))
+  })
+
   it('fades the bottom edge only while tiles sit below the fold', () => {
     renderRail()
     const scroller = screen.getByTestId('mobile-nav-rail-scroller')

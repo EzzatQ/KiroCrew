@@ -60,6 +60,7 @@ import { useTopbarCollapse } from '../lib/useTopbarCollapse'
 import { usePersistedBool } from '../hooks/usePersistedBool'
 import { usePaletteShortcutsEnabled } from '../hooks/useCommandPalette'
 import { showNativeDevTools, subscribeNativeNavigate, useMacFullscreen } from './platform/electronBridge'
+import { useNativeBadgeCount } from './platform/useNativeBadgeCount'
 import { useNativeHistoryStep } from './platform/nativeHistoryStep'
 import { useFullScreenExitHint } from './platform/fullScreenExitHint'
 import { useCrewAddressLink, usePaneOpenSlot } from '../lib/crewDeepLink'
@@ -952,6 +953,7 @@ export function useAppShell() {
   usePaneOpenSlot({ navigate, mayLeave: mayLeaveForNavigation })
   const openInAppPath = useOpenInAppPath()
   useEffect(() => subscribeNativeNavigate(openInAppPath), [openInAppPath])
+  useNativeBadgeCount()
   // Popout and embed windows install no in-app link navigator: a dashboard path
   // there keeps its previous behavior.
   useInternalNavHandler(!isPopout && !isEmbed, openInAppPath)

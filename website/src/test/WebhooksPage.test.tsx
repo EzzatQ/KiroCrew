@@ -549,6 +549,37 @@ describe('request examples and responsive shell', () => {
   })
 })
 
+describe('destructive actions on a phone', () => {
+  afterEach(() => { mockIsMobile = false })
+
+  it('moves Turn off and Revoke into a Danger zone after the run history', async () => {
+    mockIsMobile = true
+    mount(POPULATED)
+    await screen.findByTestId('webhook-detail-title')
+    fireEvent.click(screen.getByLabelText('Expand webhooks rail'))
+    fireEvent.click(await screen.findByTestId('webhook-row-token-wht_review'))
+    const detail = screen.getByTestId('webhook-detail')
+    const danger = within(detail).getByText('Danger zone').closest('section') as HTMLElement
+    const runs = within(detail).getByText('Recent runs').closest('section') as HTMLElement
+    expect(runs.compareDocumentPosition(danger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(danger).getByTestId('webhook-source-actions')).toBeTruthy()
+    expect(within(danger).getByTestId('webhook-switch-off')).toBeTruthy()
+    // Nothing destructive stays above the fold.
+    expect(within(detail).getAllByTestId('webhook-switch-off')).toHaveLength(1)
+    expect(within(detail).getAllByTestId('webhook-source-actions')).toHaveLength(1)
+  })
+
+  it('still arms before it confirms', async () => {
+    mockIsMobile = true
+    mount(POPULATED)
+    fireEvent.click(await screen.findByLabelText('Expand webhooks rail'))
+    fireEvent.click(await screen.findByTestId('webhook-row-token-wht_review'))
+    fireEvent.click(screen.getByTestId('webhook-switch-off'))
+    expect(setWebhooksEnabled).not.toHaveBeenCalled()
+    expect(screen.getByTestId('webhook-switch-off-confirm')).toBeTruthy()
+  })
+})
+
 describe('failure handling', () => {
   it('clears a failed action notice once a later action succeeds', async () => {
     updateWebhookToken.mockRejectedValueOnce(new Error('zz-pause-refused'))

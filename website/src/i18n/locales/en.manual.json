@@ -292,7 +292,10 @@
     "metrics_card_cores_other": "{{count}} cores",
     "relay_remote_control_off": "Remote access to this Crew is off",
     "relay_remote_control_off_detail": "The Crew's owner turned off remote access. Only they can turn it back on, from the Crew's computer.",
-    "relay_remote_control_off_waits": "This page reconnects by itself once it's back on."
+    "relay_remote_control_off_waits": "This page reconnects by itself once it's back on.",
+    "signed_out_title": "You're not signed in on this device",
+    "signed_out_body": "Sign in to see your sessions.",
+    "signed_out_signin": "Sign in"
   },
   "appSdk": {
     "chatEmbed": {
@@ -2449,7 +2452,10 @@
       "composer_action_footer_host": "{{productName}} checked the draft. {{app}} still can't see it.",
       "composer_action_needs_empty": "{{app}} can only insert into an empty message. Clear the draft first.",
       "composer_action_would_resolve": "{{app}}'s text starts with /, ! or @, or holds a $skill, a file or an image, so it would run instead of being sent as text. It was not inserted.",
-      "composer_action_footer": "{{app}} can't see your draft. Its text goes in as written, and you choose to send it."
+      "composer_action_footer": "{{app}} can't see your draft. Its text goes in as written, and you choose to send it.",
+      "phone_options": "Options",
+      "phone_options_hide": "Hide options",
+      "phone_options_desc": "Goal, trust level, Conductor, AI assist, agent and model"
     },
     "chatPane": {
       "crewmate_quiet": "{{name}} hasn't said anything to you yet.",

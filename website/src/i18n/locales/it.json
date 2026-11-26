@@ -368,7 +368,10 @@
     "relay_remote_control_off": "L'accesso remoto a questa Crew è disattivato",
     "relay_remote_control_off_detail": "Il proprietario della Crew ha disattivato l'accesso remoto. Solo lui può riattivarlo, dal computer della Crew.",
     "relay_remote_control_off_waits": "Questa pagina si ricollega da sola appena viene riattivato.",
-    "terminal_owner_only": "Solo il proprietario della Crew può usare il terminale."
+    "terminal_owner_only": "Solo il proprietario della Crew può usare il terminale.",
+    "signed_out_title": "Non hai effettuato l'accesso su questo dispositivo",
+    "signed_out_body": "Accedi per vedere le tue sessioni.",
+    "signed_out_signin": "Accedi"
   },
   "appSdk": {
     "chatSession": {
@@ -7349,7 +7352,10 @@
       "composer_action_footer_host": "{{productName}} ha controllato la bozza. {{app}} continua a non vederla.",
       "composer_action_needs_empty": "{{app}} può inserire solo in un messaggio vuoto. Svuota prima la bozza.",
       "composer_action_would_resolve": "Il testo di {{app}} inizia con /, ! o @, o contiene un $skill, un file o un'immagine, quindi verrebbe eseguito invece di essere inviato come testo. Non è stato inserito.",
-      "composer_action_footer": "{{app}} non vede la tua bozza. Il suo testo viene inserito così com'è e sei tu a decidere se inviarlo."
+      "composer_action_footer": "{{app}} non vede la tua bozza. Il suo testo viene inserito così com'è e sei tu a decidere se inviarlo.",
+      "phone_options": "Opzioni",
+      "phone_options_hide": "Nascondi opzioni",
+      "phone_options_desc": "Obiettivo, livello di fiducia, Conductor, assistenza IA, agente e modello"
     },
     "chatPane": {
       "agent_list": "Elenco degli agenti",

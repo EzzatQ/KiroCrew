@@ -679,7 +679,7 @@ export function createFolderBlocks(shell: SidebarScope & LaneRows) {
            *  <button>s of the collapse toggle (valid ARIA — no nesting). */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" className="cursor-pointer p-[4px] rounded text-muted hover:text-text hover:bg-bg-hover transition-all bg-transparent border-none" title={i18nT('pages.chatSidebar.more')} aria-label={i18nT('pages.chatSidebar.folder_options_for', { name: folder.name })} aria-haspopup="menu" data-testid={`folder-menu-${folder.id}`} onMouseDown={e => { e.stopPropagation() }}><MoreVertical size={12} /></button>
+              <button type="button" className="mc-touch-min flex items-center justify-center cursor-pointer p-[4px] rounded text-muted hover:text-text hover:bg-bg-hover transition-all bg-transparent border-none" title={i18nT('pages.chatSidebar.more')} aria-label={i18nT('pages.chatSidebar.folder_options_for', { name: folder.name })} aria-haspopup="menu" data-testid={`folder-menu-${folder.id}`} onMouseDown={e => { e.stopPropagation() }}><MoreVertical size={12} /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[180px]" onClick={e => e.stopPropagation()} onCloseAutoFocus={onMenuCloseAutoFocus}>
               {renderFolderMenuItems(folder, reparentTargets, 'dropdown')}
@@ -691,7 +691,7 @@ export function createFolderBlocks(shell: SidebarScope & LaneRows) {
            *  new active tab. Gated on `onOpenSlotInNewTab` --
            *  embedded hosts have no tab strip, so the modifier is ignored. */}
           {!mateManaged && (
-          <button type="button" data-testid={`folder-new-chat-${folder.id}`} className="cursor-pointer p-[4px] rounded text-muted hover:text-accent hover:bg-bg-hover transition-all bg-transparent border-none" title={i18nT('pages.chatSidebar.new_chat_in_name', { name: folder.name })} aria-label={i18nT('pages.chatSidebar.new_chat_in_name', { name: folder.name })} {...offlineProps(connected, i18nT('utils.offline.create_sessions'), i18nT('pages.chatSidebar.new_chat_in_name', { name: folder.name }))}
+          <button type="button" data-testid={`folder-new-chat-${folder.id}`} className="mc-touch-min flex items-center justify-center cursor-pointer p-[4px] rounded text-muted hover:text-accent hover:bg-bg-hover transition-all bg-transparent border-none" title={i18nT('pages.chatSidebar.new_chat_in_name', { name: folder.name })} aria-label={i18nT('pages.chatSidebar.new_chat_in_name', { name: folder.name })} {...offlineProps(connected, i18nT('utils.offline.create_sessions'), i18nT('pages.chatSidebar.new_chat_in_name', { name: folder.name }))}
             onMouseDownCapture={onOpenSlotInNewTab ? (e => { if (e.button === 1) e.preventDefault() }) : undefined}
             onAuxClick={onOpenSlotInNewTab ? (e => {
               if (e.button !== 1) return

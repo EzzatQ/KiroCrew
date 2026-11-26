@@ -578,7 +578,7 @@ const AssistantMessage = memo(function AssistantMessage({ content, isStreaming, 
             <MoreHorizontal size={14} />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" collisionPadding={forkWithHistory ? 8 : undefined} className={forkWithHistory ? 'min-w-[210px] max-w-[min(20rem,calc(100vw_-_1rem))]' : 'min-w-[210px]'}>
+        <DropdownMenuContent data-testid="message-actions-menu" align="end" collisionPadding={forkWithHistory ? 8 : undefined} className={forkWithHistory ? 'min-w-[210px] max-w-[min(20rem,calc(100vw_-_1rem))]' : 'min-w-[210px]'}>
           {/* Only when the row does not show Quote: More lists what the row
               lacks. The right-click menu is a separate surface with no row
               beside it, so it keeps Quote first on every reply. */}

@@ -104,3 +104,43 @@ describe('mc-touch-hit: 44px hit area on a coarse pointer only', () => {
     }
   })
 })
+
+describe('.mc-touch-min grows the real box, on a coarse pointer only', () => {
+  const MIN_BLOCK = /\/\* ── Real 44px floor[\s\S]*?@layer components \{\n {2}@media \(pointer: coarse\) \{\n([\s\S]*?)\n {2}\}\n\}/.exec(CSS)
+
+  it('declares 44x44 minimums inside the coarse-pointer media query', () => {
+    expect(MIN_BLOCK, 'the .mc-touch-min block is missing').not.toBeNull()
+    expect(MIN_BLOCK![1]).toMatch(/\.mc-touch-min\s*\{\s*min-width:\s*44px;\s*min-height:\s*44px;\s*\}/)
+  })
+
+  it('has no rule outside the coarse-pointer query', () => {
+    const outside = CSS.replace(MIN_BLOCK?.[0] ?? '', '')
+    expect(outside).not.toMatch(/\.mc-touch-min\s*\{/)
+  })
+})
+
+describe('.mc-touch-min companions', () => {
+  it('bleeds header controls vertically and spaces destructive neighbours, on coarse pointers only', () => {
+    const block = /\.mc-touch-min \{[\s\S]*?\n {2}\}\n\}/.exec(CSS)?.[0] ?? ''
+    expect(block).toMatch(/\.mc-touch-min-bleed \{ margin-block: -8px; \}/)
+    expect(block).toMatch(/\.mc-touch-gap-end \{ margin-inline-end: 12px; \}/)
+  })
+})
+
+describe('panes are solid on a coarse pointer, even with Translucent panels on', () => {
+  const BLOCK_SOLID = /@media \(pointer: coarse\) and \(not \(prefers-contrast: more\)\)\{\n([\s\S]*?)\n\}/.exec(CSS)?.[1] ?? ''
+
+  it('solidifies the composer glass, header and notification cards', () => {
+    expect(BLOCK_SOLID, 'the coarse-pointer solid block is missing').not.toBe('')
+    expect(BLOCK_SOLID).toContain('.liquid-glass{ background:var(--bg-elevated) !important')
+    expect(BLOCK_SOLID).toContain('.liquid-glass>[data-liquid-glass-layer]{ display:none !important }')
+    expect(BLOCK_SOLID).toContain('.topbar-glass,.glass-surface{ backdrop-filter:none !important')
+    expect(BLOCK_SOLID).toContain('.notif-material{ background:var(--card) !important }')
+  })
+
+  it('keeps the chip hues on the solid fill', () => {
+    for (const hue of ['accent', 'warn', 'danger']) {
+      expect(BLOCK_SOLID).toContain(`.liquid-glass.glass-${hue}{ background:color-mix(in srgb, var(--${hue})`)
+    }
+  })
+})

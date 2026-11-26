@@ -315,3 +315,25 @@ describe('WeekGrid: localized dot and legend', () => {
     }
   })
 })
+
+describe('WeekGrid on a touch screen', () => {
+  it('pins the day headers and scrolls the hours inside its own box', () => {
+    renderWithProviders(<WeekGrid jobs={[job()]} onSelect={vi.fn()} renderTz="UTC" />)
+    const headers = screen.getAllByTestId('week-day-header')
+    expect(headers).toHaveLength(7)
+    for (const h of headers) {
+      expect(h.className).toContain('sticky')
+      expect(h.className).toContain('top-0')
+      expect(h.className).toContain('bg-card')
+    }
+    const scroller = screen.getByTestId('week-grid-scroller')
+    expect(scroller.className).toContain('[@media(pointer:coarse)]:max-h-[70dvh]')
+  })
+
+  it('draws bigger markers with a 44px hit area on a coarse pointer', () => {
+    renderWithProviders(<WeekGrid jobs={[job()]} onSelect={vi.fn()} renderTz="UTC" />)
+    const dot = screen.getAllByRole('button', { name: /nightly report at/ })[0]
+    expect(dot.className).toContain('mc-touch-hit')
+    expect(dot.className).toContain('[@media(pointer:coarse)]:w-4')
+  })
+})

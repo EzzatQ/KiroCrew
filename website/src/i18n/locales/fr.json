@@ -368,7 +368,10 @@
     "relay_remote_control_off": "L'accès à distance à cette Crew est désactivé",
     "relay_remote_control_off_detail": "Le propriétaire de la Crew a désactivé l'accès à distance. Lui seul peut le réactiver, depuis l'ordinateur de la Crew.",
     "relay_remote_control_off_waits": "Cette page se reconnectera d'elle-même dès qu'il sera réactivé.",
-    "terminal_owner_only": "Seul le propriétaire de la Crew peut utiliser le terminal."
+    "terminal_owner_only": "Seul le propriétaire de la Crew peut utiliser le terminal.",
+    "signed_out_title": "Vous n'êtes pas connecté sur cet appareil",
+    "signed_out_body": "Connectez-vous pour voir vos sessions.",
+    "signed_out_signin": "Se connecter"
   },
   "appSdk": {
     "chatSession": {
@@ -7351,7 +7354,10 @@
       "composer_action_footer_host": "{{productName}} a vérifié le brouillon. {{app}} ne le voit toujours pas.",
       "composer_action_needs_empty": "{{app}} ne peut insérer que dans un message vide. Vide d'abord le brouillon.",
       "composer_action_would_resolve": "Le texte de {{app}} commence par /, ! ou @, ou contient un $skill, un fichier ou une image : il s'exécuterait au lieu d'être envoyé comme texte. Il n'a pas été inséré.",
-      "composer_action_footer": "{{app}} ne voit pas ton brouillon. Son texte est inséré tel quel, et c'est toi qui choisis de l'envoyer."
+      "composer_action_footer": "{{app}} ne voit pas ton brouillon. Son texte est inséré tel quel, et c'est toi qui choisis de l'envoyer.",
+      "phone_options": "Options",
+      "phone_options_hide": "Masquer les options",
+      "phone_options_desc": "Objectif, niveau de confiance, Conductor, assistance IA, agent et modèle"
     },
     "chatPane": {
       "agent_list": "Liste des agents",

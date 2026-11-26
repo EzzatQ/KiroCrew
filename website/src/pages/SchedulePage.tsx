@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from 'rea
 import { Link, useSearchParams } from 'react-router-dom'
 import { Trans } from 'react-i18next'
 import { useImeGuard } from '../hooks/useImeGuard'
+import { useIsMobile } from '../hooks/useIsMobile'
 import Clickable from '../components/Clickable'
 import { List, CalendarDays, CalendarClock, Plus, ClipboardList, ChevronRight, Globe, History, Trash2, FolderPlus, MoreHorizontal, Pencil, Folder, LayoutGrid, GitPullRequestArrow, Download, KeyRound, Info, X, Loader2, Clock } from 'lucide-react'
 import { api, type MemberRosterRow } from '../api/client'
@@ -595,6 +596,7 @@ export default function SchedulePage() {
     }
   }, [load, setActionError])
   const { armedId: confirmDeleteId, arm: armDelete, confirm: confirmDelete, isDeleting } = useArmedDelete(performDelete)
+  const isMobile = useIsMobile()
   // The crewmates that own at least one listed job, for the filter.
   const crewmateOptions = useMemo(() => {
     const byName = new Map<string, MemberRosterRow>()
@@ -769,6 +771,8 @@ export default function SchedulePage() {
               onChange={setJobsView}
               layoutId="schedule-view"
               collapse={false}
+              tabs
+              ariaLabel={i18nT('pages.schedulePage.schedule')}
             />
           }
         />
@@ -1277,12 +1281,12 @@ export default function SchedulePage() {
                         row context names the job. Same convention as
                         ChatInput's Continue/Send buttons. While the delete runs it
                         is busy the way Run is: focusable, named, spinner over it. */}
-                    <Btn
+                    {(!isMobile || confirmDeleteId === j.id || isDeleting(j.id)) && <Btn
                       danger
                       aria-disabled={isDeleting(j.id) || undefined} aria-busy={isDeleting(j.id) || undefined} className="relative aria-disabled:cursor-progress"
                       title={confirmDeleteId === j.id ? i18nT('pages.schedulePage.click_again_to_confirm') : i18nT('pages.schedulePage.delete_job')}
                       onClick={() => { if (confirmDeleteId === j.id) void confirmDelete(j.id); else armDelete(j.id) }}
-                    >{isDeleting(j.id) && <Loader2 aria-hidden className="absolute inset-0 m-auto lucide-inline motion-safe:animate-spin" />}<span className={isDeleting(j.id) ? 'opacity-0' : undefined}>{confirmDeleteId === j.id ? i18nT('pages.schedulePage.confirm_delete_job') : i18nT('pages.schedulePage.delete')}</span></Btn>
+                    >{isDeleting(j.id) && <Loader2 aria-hidden className="absolute inset-0 m-auto lucide-inline motion-safe:animate-spin" />}<span className={isDeleting(j.id) ? 'opacity-0' : undefined}>{confirmDeleteId === j.id ? i18nT('pages.schedulePage.confirm_delete_job') : i18nT('pages.schedulePage.delete')}</span></Btn>}
                     <CronRowActions
                       job={j}
                       folders={cronFolders}
@@ -1295,6 +1299,7 @@ export default function SchedulePage() {
                       onToggleStrict={async () => { try { await api.updateCron(j.id, { strict_schedule: !j.strict_schedule }); load() } catch (e: unknown) { setActionError({ id: j.id, msg: e instanceof Error ? e.message : i18nT('pages.schedulePage.failed') }) } }}
                       onMove={fid => handleMoveJob(j.id, fid)}
                       onNewFolder={handleNewFolder}
+                      onArmDelete={isMobile ? () => armDelete(j.id) : undefined}
                     />
                   </div>
                 </TableCell>

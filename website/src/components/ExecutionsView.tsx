@@ -95,10 +95,10 @@ export default function ExecutionsView({ selectedJobId }: { selectedJobId?: stri
           <thead><tr>
             <th className="text-left text-muted text-[12px] uppercase tracking-[.04em] px-2.5 py-2 border-b border-border font-medium w-[70px]">{i18nT('components.executionsView.status')}</th>
             <th className="text-left text-muted text-[12px] uppercase tracking-[.04em] px-2.5 py-2 border-b border-border font-medium">{i18nT('components.executionsView.job_name')}</th>
-            <th className="text-left text-muted text-[12px] uppercase tracking-[.04em] px-2.5 py-2 border-b border-border font-medium w-[160px]">{i18nT('components.executionsView.timestamp')}</th>
-            <th className="text-left text-muted text-[12px] uppercase tracking-[.04em] px-2.5 py-2 border-b border-border font-medium w-[90px]">{i18nT('components.executionsView.duration')}</th>
-            <th className="text-left text-muted text-[12px] uppercase tracking-[.04em] px-2.5 py-2 border-b border-border font-medium w-[80px]">{i18nT('components.executionsView.trigger')}</th>
-            <th className="text-left text-muted text-[12px] uppercase tracking-[.04em] px-2.5 py-2 border-b border-border font-medium">{i18nT('components.executionsView.summary')}</th>
+            <th className="text-left text-muted text-[12px] uppercase tracking-[.04em] px-2.5 py-2 border-b border-border font-medium sm:w-[160px]">{i18nT('components.executionsView.timestamp')}</th>
+            <th className="text-left text-muted text-[12px] uppercase tracking-[.04em] px-2.5 py-2 border-b border-border font-medium w-[90px] max-sm:hidden">{i18nT('components.executionsView.duration')}</th>
+            <th className="text-left text-muted text-[12px] uppercase tracking-[.04em] px-2.5 py-2 border-b border-border font-medium w-[80px] max-sm:hidden">{i18nT('components.executionsView.trigger')}</th>
+            <th className="text-left text-muted text-[12px] uppercase tracking-[.04em] px-2.5 py-2 border-b border-border font-medium max-sm:hidden">{i18nT('components.executionsView.summary')}</th>
           </tr></thead>
           <tbody>
             {entries.map(e => {
@@ -122,11 +122,17 @@ export default function ExecutionsView({ selectedJobId }: { selectedJobId?: stri
                       {e.job_name}
                     </button>
                     {isDeleted && <span className="ml-1.5 text-muted text-[11px]">{i18nT('components.executionsView.deleted')}</span>}
+                    {/* On a phone the Summary column is folded under the name. */}
+                    {e.summary && <div data-testid="execution-summary-compact" className="sm:hidden mt-0.5 text-[12px] text-muted line-clamp-2">{e.summary}</div>}
                   </td>
-                  <td className="px-2.5 py-2 border-b border-border text-sm text-muted">{fmtTime(e.started_at)}</td>
-                  <td className="px-2.5 py-2 border-b border-border text-sm text-muted">{fmtDuration(e.duration_ms)}</td>
-                  <td className="px-2.5 py-2 border-b border-border text-sm"><span className="px-1.5 py-[1px] rounded text-[11px] bg-bg-elevated border border-border">{e.trigger}</span></td>
-                  <td className="px-2.5 py-2 border-b border-border text-sm text-muted truncate max-w-[300px]">
+                  <td className="px-2.5 py-2 border-b border-border text-sm text-muted">
+                    {fmtTime(e.started_at)}
+                    {/* On a phone Duration and Trigger fold under the time. */}
+                    <div data-testid="execution-meta-compact" className="sm:hidden mt-0.5 text-[11px]">{fmtDuration(e.duration_ms)} · {e.trigger}</div>
+                  </td>
+                  <td className="px-2.5 py-2 border-b border-border text-sm text-muted max-sm:hidden">{fmtDuration(e.duration_ms)}</td>
+                  <td className="px-2.5 py-2 border-b border-border text-sm max-sm:hidden"><span className="px-1.5 py-[1px] rounded text-[11px] bg-bg-elevated border border-border">{e.trigger}</span></td>
+                  <td className="px-2.5 py-2 border-b border-border text-sm text-muted truncate max-w-[300px] max-sm:hidden">
                     <span className="flex items-center gap-1">
                       <ChevronRight size={12} aria-hidden="true" className={`shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                       {e.summary || '—'}

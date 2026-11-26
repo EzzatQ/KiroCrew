@@ -83,6 +83,7 @@ import { PromptStashMenuItems } from './PromptStashBadge'
 import { ComposerMoreMenu } from './chat-input/ComposerMoreMenu'
 import { useComposerPromptStash, usePromptStashTrackedSends } from './chat-input/composerPromptStash'
 import { BusySendControls, CompactingIndicator, useComposerSend } from './chat-input/busySend'
+import { phoneOptionsMenuRow, usePhoneChipsOpen, usePhoneComposer } from './chat-input/phoneComposer'
 import { CollapsedComposerBar, collapseMenuRowElement, useComposerCollapse } from './chat-input/collapse'
 import { useGuideRevealScope } from '../guide/GuideRevealScope'
 import { useComposerFocus, useComposerKeyDown, useEditorInput } from './chat-input/keyboard'
@@ -294,7 +295,7 @@ function ChatInput({
   hiddenCommands,
   slotApprovalChrome = true,
   promptOptimizer: promptOptimizerProp = true,
-  inlineToolbarWhileFits = false,
+  inlineToolbarWhileFits: inlineToolbarWhileFitsProp = false,
   promptStash: promptStashEnabled = true,
   collapsible = false,
   connected = true,
@@ -584,7 +585,12 @@ function ChatInput({
   // else (the Crewmates DM, a split pane, the side chat) "+" opens its menu on
   // touch too, so Sketch is a row in it instead of a second pencil button.
   const touchInput = isMobile || isTouchDevice()
-  const directFilePicker = touchInput && collapsible
+  // The phone composer (narrow + coarse pointer) wants the real "+" menu, which holds the
+  // Options row, so the bare file picker gives way there.
+  const phoneComposer = usePhoneComposer()
+  const [phoneChipsOpen, togglePhoneChips] = usePhoneChipsOpen(phoneComposer, !!automationOpen || approvalNudgeActive, approvalPickerSignal)
+  const inlineToolbarWhileFits = inlineToolbarWhileFitsProp || phoneComposer
+  const directFilePicker = touchInput && collapsible && !phoneComposer
   // Where the stash rows live: the ⋯ overflow only where "+" cannot hold
   // them (a bare file picker on the collapsible touch host, or no "+" at
   // all); everywhere else the "+" menu, touch included, so the row never
@@ -612,9 +618,13 @@ function ChatInput({
     remeasureControlRow()
   }, [hasAutomation, automation, approvalMode, isMobile, remeasureControlRow])
   const ime = useImeGuard()
-  const resolvedPlaceholder = placeholder || i18nT(terminal.canAdvertise
-    ? 'components.chatInput.message_placeholder_terminal'
-    : 'components.chatInput.message_placeholder', { bot: botName })
+  // On a phone the full hint (`/command · @file · $skill …`) is wider than the
+  // field and clips mid-word, so it shows the short form, "Message {{bot}}…".
+  const resolvedPlaceholder = placeholder || i18nT(isMobile
+    ? 'components.chatInput.message_placeholder_crewmate'
+    : terminal.canAdvertise
+      ? 'components.chatInput.message_placeholder_terminal'
+      : 'components.chatInput.message_placeholder', { bot: botName })
   // An icon swap alone announces nothing, so the empty-state placeholder carries
   // the explanation — and it names typing as the other way out, so the morph
   // never feels like a trap.
@@ -901,7 +911,14 @@ function ChatInput({
   const inBoxStatusStrip = (holdSend && (composerHasDraft || hasSessionRefs)) || uploadsRunning || voiceRecording ||
     !!voiceError || !!voiceDownload || voiceDrainCancellable || micHeldElsewhere || voiceHeldLanded ||
     (promptStashEnabled && (!!promptStash.error || !!promptStash.notice || promptStash.count > 0))
-  const inlineToolbar = inlineToolbarWhileFits && textFitsOneRow && !pendingFiles.length && !pendingDirs.length && !hasQuote && !hasSessionRefs && !inBoxStatusStrip && manualHeight === null &&
+  // Phone: the one slot beside the field is the mic while the box is empty and Send once it
+  // holds something. Voice that is already running (hold bar, recording, transcribing) keeps
+  // the mic so it can be stopped; a staged file, quote or session ref counts as content.
+  const phoneVoiceActive = voiceHoldMode || voiceRecording || transcribeInFlight || showDictation
+  const phoneHasContent = !!value.trim() || pendingFiles.length > 0 || hasSessionRefs || hasQuote
+  const phoneHidesMic = phoneComposer && phoneHasContent && !phoneVoiceActive
+  const phoneHidesSend = phoneComposer && !!onVoiceToggle && !phoneHasContent && !phoneVoiceActive
+  const inlineToolbar = inlineToolbarWhileFits && textFitsOneRow && !pendingFiles.length && !pendingDirs.length && !hasQuote && !hasSessionRefs && !inBoxStatusStrip && manualHeight === null && !phoneChipsOpen &&
     !terminal.active && !voiceHoldMode && !showDictation && !lexicalLoadFailed
   // The list-indent hint shows under the text while the textarea has focus.
   // On the one-row shape it stays screen-reader only: a visible row would sit
@@ -1574,7 +1591,7 @@ function ChatInput({
           data-composer-typo
           // Chromium paints no `text-overflow` on a `::placeholder`, so the cut tail
           // fades out instead, the way the app's other cut edges do.
-          className={/* focus-cue-ok: maintainer decision -- the glass dock holding this textarea does not change on focus (no ring, no colour, no shadow step; index.css `.glass-shadow`), and a ring on the textarea itself is not wanted either; the caret is the composer's focus indicator. */ `relative block w-full [scrollbar-gutter:stable] bg-transparent border-none ${INPUT_TYPO} text-text outline-hidden min-h-[44px] max-h-[50vh] placeholder:text-muted resize-none ${placeholderIsHint ? 'placeholder:whitespace-nowrap placeholder:overflow-hidden placeholder:[mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)] placeholder:[-webkit-mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]' : ''} ${manualHeight !== null ? 'flex-1' : ''} ${disabled ? 'opacity-40 pointer-events-none' : ''} ${optimizing ? 'opacity-30' : ''}`}
+          className={/* focus-cue-ok: maintainer decision -- the glass dock holding this textarea does not change on focus (no ring, no colour, no shadow step; index.css `.glass-shadow`), and a ring on the textarea itself is not wanted either; the caret is the composer's focus indicator. */ `relative block w-full [scrollbar-gutter:stable] bg-transparent border-none ${INPUT_TYPO} text-text outline-hidden min-h-[44px] max-h-[50vh] [@media(orientation:landscape)_and_(max-height:500px)]:max-h-[35vh] placeholder:text-muted resize-none ${placeholderIsHint ? 'placeholder:whitespace-nowrap placeholder:overflow-hidden placeholder:[mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)] placeholder:[-webkit-mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]' : ''} ${manualHeight !== null ? 'flex-1' : ''} ${disabled ? 'opacity-40 pointer-events-none' : ''} ${optimizing ? 'opacity-30' : ''}`}
           style={manualHeight !== null ? { height: '100%' } : undefined}
           placeholder={activePlaceholder}
           // A disabled composer takes no keystrokes either: `pointer-events-none`
@@ -1673,12 +1690,15 @@ function ChatInput({
         <div data-testid="composer-bottom-row" className={inlineToolbar ? 'contents' : `flex items-center justify-between px-2.5 pb-2 pt-0.5${terminal.active ? ' flex-wrap gap-y-1' : ''}`}>
           {typingLock && <TypingLockBanner lock={typingLock} />}
           <div ref={leftClusterRef} className={`flex items-center gap-0.5 min-w-0${inlineToolbar ? ' order-first pl-1.5 shrink-0 relative z-[1]' : ''}${typingLocked ? ' hidden' : ''}`}>
-            <AttachMenu plus={plus} onUploadFiles={onUploadFiles} directFilePicker={directFilePicker} fileInputId={fileInputId} openPicker={openPicker} isMac={isMac} touchInput={touchInput} onScreenshot={onScreenshot} collapseMenuRow={collapseMenuRow} typedCommandMenus={typedCommandMenus && !terminal.active} onFileSelect={terminal.active ? undefined : onFileSelect} optimizeRow={plusOptimizeRow} appActionRows={appActions.rows}
-              stashMenuRows={stashTouchHost && !stashInOverflow ? (
-                /* Prompt stash actions live in this menu, not the bottom action row:
-                   that row already holds its buttons (max-two-buttons-per-row). */
-                <PromptStashMenuItems stash={promptStash} chordLabel={promptStashChord} touch={isTouchDevice()} onPicked={() => plus.setPlusOpen(false)} />
-              ) : null}
+            <AttachMenu touchMin={phoneComposer} plus={plus} onUploadFiles={onUploadFiles} directFilePicker={directFilePicker} fileInputId={fileInputId} openPicker={openPicker} isMac={isMac} touchInput={touchInput} onScreenshot={onScreenshot} collapseMenuRow={collapseMenuRow} typedCommandMenus={typedCommandMenus && !terminal.active} onFileSelect={terminal.active ? undefined : onFileSelect} optimizeRow={plusOptimizeRow} appActionRows={appActions.rows}
+              stashMenuRows={(<>
+                {phoneComposer && phoneOptionsMenuRow(phoneChipsOpen, () => { plus.setPlusOpen(false); togglePhoneChips() })}
+                {stashTouchHost && !stashInOverflow ? (
+                  /* Prompt stash actions live in this menu, not the bottom action row:
+                     that row already holds its buttons (max-two-buttons-per-row). */
+                  <PromptStashMenuItems stash={promptStash} chordLabel={promptStashChord} touch={isTouchDevice()} onPicked={() => plus.setPlusOpen(false)} />
+                ) : null}
+              </>)}
             />
             {/* The ⋯ overflow hosts the collapse and Sketch on the collapsible
                 touch host (`directFilePicker`, where "+" is a bare file picker)
@@ -1702,7 +1722,7 @@ function ChatInput({
                 content, so the fades anchor to this non-scrolling parent. It
                 also owns the flex sizing so the scroller keeps filling the
                 row. */}
-            <div className="relative min-w-0 flex-1">
+            <div className={`relative min-w-0 flex-1${phoneComposer && !phoneChipsOpen ? ' hidden' : ''}`} data-testid={phoneComposer ? 'composer-phone-chips' : undefined}>
               <div ref={attachControlRow} data-testid="composer-control-row" data-fade-left={controlRowEdges.left ? 'true' : undefined} data-fade-right={controlRowEdges.right ? 'true' : undefined} className="edge-fade-x flex items-center gap-0.5 overflow-x-auto">
 
               {onAutomationClick && (
@@ -1731,14 +1751,14 @@ function ChatInput({
                   surface; a painted from-bg-elevated gradient drew an opaque block
                   over the translucent composer. */}
             </div>
-            {isMobile && approvalMode && (
+            {isMobile && approvalMode && !(phoneComposer && !phoneChipsOpen) && (
               <ApprovalModePicker mode={approvalMode} slotKey={activeSlot || ''} remote={approvalModeRemote} approveForMe={approveForMe} compact onPicked={focusComposerAfterPick} openSignal={approvalPickerSignal} nudge={approvalNudgeActive} onNudgeDismiss={dismissApprovalNudge} onNudgeHide={hideApprovalNudge} />
             )}
-            {isMobile && afterApprovalMode}
+            {isMobile && !(phoneComposer && !phoneChipsOpen) && afterApprovalMode}
           </div>
           <div ref={rightClusterRef} className={`flex items-center gap-1 shrink-0${terminal.active ? ' ml-auto max-w-full justify-end [&>button]:shrink-0' : ''}${inlineToolbar ? ' order-last pr-1.5' : ''}`}>
-            {onVoiceToggle && !typingLocked && (
-              <MicButton voiceHoldMode={voiceHoldMode} voiceRecording={voiceRecording} micIsModeSwitch={micIsModeSwitch} transcribeInFlight={transcribeInFlight} micHeldElsewhere={micHeldElsewhere} micBlocked={micBlocked} toggleVoiceMode={toggleVoiceMode} onVoiceToggle={onVoiceToggle} onVoicePrewarm={onVoicePrewarm} disabled={disabled} optimizing={optimizing} micLabel={micLabel} micKeyShortcuts={micKeyShortcuts} />
+            {onVoiceToggle && !typingLocked && !phoneHidesMic && (
+              <MicButton voiceHoldMode={voiceHoldMode} voiceRecording={voiceRecording} micIsModeSwitch={micIsModeSwitch} transcribeInFlight={transcribeInFlight} micHeldElsewhere={micHeldElsewhere} micBlocked={micBlocked} toggleVoiceMode={toggleVoiceMode} onVoiceToggle={onVoiceToggle} onVoicePrewarm={onVoicePrewarm} disabled={disabled} optimizing={optimizing} micLabel={micLabel} micKeyShortcuts={micKeyShortcuts} touchMin={phoneComposer} />
             )}
             {/* The busy branch is reachable with EITHER a stop affordance or a
                 steer path: a host without onStop still needs the split
@@ -1806,9 +1826,9 @@ function ChatInput({
                   {continuing ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
                   {i18nT('components.chatInput.resume')}
                 </button>
-              ) : (
+              ) : phoneHidesSend ? null : (
               <button
-                className="primary w-8 h-8 rounded-full bg-accent text-accent-fg border-none flex items-center justify-center cursor-pointer hover:bg-accent-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className={`primary ${phoneComposer ? 'mc-touch-min ' : ''}w-8 h-8 rounded-full bg-accent text-accent-fg border-none flex items-center justify-center cursor-pointer hover:bg-accent-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all`}
                 onClick={sendOrOptimize}
                 disabled={(!value.trim() && !pendingFiles.length && !hasSessionRefs && !hasQuote) || disabled || holdSend || optimizing || !connected}
                 title={holdSend ? holdSendReason : undefined}
@@ -1850,6 +1870,7 @@ function ChatInput({
           would have shipped a "reclaim the space" control that reclaimed little. */}
       {!showGhost &&
         !composerCollapsed &&
+        (!phoneComposer || phoneChipsOpen) &&
         (onProjectClick ||
           (sessionOnPeer && !!projectProp) ||
           (onModelClick && modelName) ||

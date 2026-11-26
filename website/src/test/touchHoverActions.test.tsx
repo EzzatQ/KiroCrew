@@ -41,7 +41,7 @@ const expectRowTouchOverrides = (cls: string) => {
 
 describe('ICON_ACTION_ROW_CLS (icon-only footers)', () => {
   // The message footers use a third shape that styles BOTH pointer types:
-  // fixed square cells sitting flush, 28px for a pointer and 36x32 for touch,
+  // fixed square cells sitting flush, 28px for a pointer and 44x44 for touch,
   // with the same reveal on touch as the row shape.
   it('sizes cells instead of padding, flush, for pointer and touch alike', () => {
     expect(ICON_ACTION_ROW_CLS).toContain('gap-x-0')
@@ -51,8 +51,8 @@ describe('ICON_ACTION_ROW_CLS (icon-only footers)', () => {
     expect(ICON_ACTION_ROW_CLS).toContain('[&_button:hover]:bg-bg-hover')
     expect(ICON_ACTION_ROW_CLS).toContain('[@media(hover:none)]:opacity-100')
     expect(ICON_ACTION_ROW_CLS).toContain('[@media(hover:none)]:flex-wrap')
-    expect(ICON_ACTION_ROW_CLS).toContain('[@media(hover:none)]:[&_button]:h-8')
-    expect(ICON_ACTION_ROW_CLS).toContain('[@media(hover:none)]:[&_button]:w-9')
+    expect(ICON_ACTION_ROW_CLS).toContain('[@media(hover:none)]:[&_button]:h-11')
+    expect(ICON_ACTION_ROW_CLS).toContain('[@media(hover:none)]:[&_button]:w-11')
     expect(ICON_ACTION_ROW_CLS).not.toContain('[&_button]:p-3')
   })
 

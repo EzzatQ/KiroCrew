@@ -35,6 +35,7 @@ import { isUntitledSession, sessionDisplayTitle } from '../../../utils/sessionDi
 import { sessionMemoryTag } from '../../../lib/agentMemorySource'
 import { dismissFollowupItem, type FollowupItem } from '../../../store/chatSlice'
 import { usePersistedBool } from '../../../hooks/usePersistedBool'
+import { useIsTouchDevice } from '../../../hooks/useIsTouchDevice'
 import { FOLLOWUP_START_SENDS_KEY } from '../followupStartSends'
 import { Input } from '../../../components/ui'
 import { KnowledgeBubbleChip } from '../ChatPageMessageContent'
@@ -125,6 +126,8 @@ interface ComposerDockViewProps {
   composerDraft: ComposerDraftStore
   historySuggestions: SessionInfo[]
   showHistorySuggestions: boolean
+  /** Dismisses the suggestions without a keyboard (the touch Close button). */
+  onDismissHistorySuggestions?: () => void
   chatConfig: ChatConfig
   agentDropdown: boolean
   agentDropdownRef: RefObject<HTMLDivElement>
@@ -344,7 +347,7 @@ interface ComposerDockViewProps {
  */
 export default function ComposerDockView({
   embedded, forkUnavailable = false, mode, activeSlot, connected, dispatch, navigate, provider, activityOpen, composerBusy, contextPct, contextTokens, knowledgeFetch, messages, pendingFollowup,
-  pendingQuestion, projectLocked, restoredQuestionNotice, sentMessages, slotRunning, slotStopping, composerDraft, historySuggestions, showHistorySuggestions, chatConfig, agentDropdown,
+  pendingQuestion, projectLocked, restoredQuestionNotice, sentMessages, slotRunning, slotStopping, composerDraft, historySuggestions, showHistorySuggestions, onDismissHistorySuggestions, chatConfig, agentDropdown,
   agentDropdownRef, agentFilter, agentInputRef, defaultAgent, defaultAgentFailed, effectiveAgents, filteredAgents, installedAgents, setAgentDropdown, setAgentFilter, toggleDefaultAgent,
   codexPairModels, filteredModels, hiddenModelsQ, ownModelsFailed, ownModelsFetching, retryOwnModels, modelsBackend, jevRouteOn, modelDropdown, modelDropdownRef, modelFilter, modelInputRef, modelPickerConfigured, modelPickerReturnsFocusRef, setModelDropdown,
   setModelFilter, onAgentListKeyDown, onModelListKeyDown, anchorModelBtn, modelBtnRect, messageQuote, onJumpToQuote, applyAutomationChange, automation, automationCreationReady, automationOpen,
@@ -360,6 +363,7 @@ export default function ComposerDockView({
   queuePendingIds, steer, stopTurn, systemDeliveryCount, handleEditLastRequest, composerOptimizing, handleOptimizingChange, memorySwitching, showComposerMemoryChip, switchMemoryMode, composerAbove, typingLock, composerPresence,
   composerSessionControls, crewModeOffered, crewModeMidChatOffered = false, turnOnCrewMode, turnOffCrewMode, crewModeSwitching = null, agentPickerHidden = false, agentPickerKept = false, crewChipPressed = false, agentSwitchLocked = false, steerWorker, steerWorkerRoot = '',
 }: ComposerDockViewProps) {
+  const isTouch = useIsTouchDevice()
   // A chat on a Session Environment runs in its workspace; see ChatPane.
   const runsHere = useSlotRunsHere(currentSlot && currentSlot.executor !== 'remote' ? currentSlot.key : null)
   const crewModeNoteId = useId()
@@ -550,7 +554,18 @@ export default function ComposerDockView({
                     ))}
                   </div>
                   <div className="px-3.5 py-2 border-t border-border flex justify-end shrink-0">
-                    <span className="text-[11px] text-muted-strong">{i18nT('pages.chatPage.esc_to_dismiss')}</span>
+                    {isTouch ? (
+                      <button
+                        type="button"
+                        data-testid="history-suggestions-dismiss"
+                        onClick={onDismissHistorySuggestions}
+                        className="mc-touch-min px-3 rounded-md border-none bg-transparent text-[12px] text-muted-strong cursor-pointer"
+                      >
+                        {i18nT('app.close')}
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-muted-strong">{i18nT('pages.chatPage.esc_to_dismiss')}</span>
+                    )}
                   </div>
                 </div>
               )}

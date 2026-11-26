@@ -368,7 +368,10 @@
     "relay_remote_control_off": "O acesso remoto a esta Crew está desativado",
     "relay_remote_control_off_detail": "O proprietário da Crew desativou o acesso remoto. Só ele pode reativá-lo, no computador da Crew.",
     "relay_remote_control_off_waits": "Esta página se reconecta sozinha assim que ele for reativado.",
-    "terminal_owner_only": "Só o dono da Crew pode usar o terminal."
+    "terminal_owner_only": "Só o dono da Crew pode usar o terminal.",
+    "signed_out_title": "Você não está conectado neste dispositivo",
+    "signed_out_body": "Entre para ver suas sessões.",
+    "signed_out_signin": "Entrar"
   },
   "appSdk": {
     "chatSession": {
@@ -7351,7 +7354,10 @@
       "composer_action_footer_host": "O {{productName}} verificou o rascunho. {{app}} continua sem vê-lo.",
       "composer_action_needs_empty": "{{app}} só pode inserir em uma mensagem vazia. Esvazie o rascunho primeiro.",
       "composer_action_would_resolve": "O texto de {{app}} começa com /, ! ou @, ou contém um $skill, um arquivo ou uma imagem, então seria executado em vez de enviado como texto. Não foi inserido.",
-      "composer_action_footer": "{{app}} não vê seu rascunho. O texto dele entra como está, e você decide se envia."
+      "composer_action_footer": "{{app}} não vê seu rascunho. O texto dele entra como está, e você decide se envia.",
+      "phone_options": "Opções",
+      "phone_options_hide": "Ocultar opções",
+      "phone_options_desc": "Meta, nível de confiança, Conductor, assistência de IA, agente e modelo"
     },
     "chatPane": {
       "agent_list": "Lista de agentes",

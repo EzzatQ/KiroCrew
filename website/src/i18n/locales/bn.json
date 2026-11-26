@@ -351,7 +351,10 @@
     "relay_remote_control_off": "এই Crew-এর রিমোট অ্যাক্সেস বন্ধ আছে",
     "relay_remote_control_off_detail": "Crew-এর মালিক রিমোট অ্যাক্সেস বন্ধ করেছেন। শুধু তিনিই Crew-এর কম্পিউটার থেকে এটি আবার চালু করতে পারেন।",
     "relay_remote_control_off_waits": "আবার চালু হলে এই পেজটি নিজে থেকেই আবার সংযুক্ত হবে।",
-    "terminal_owner_only": "শুধু Crew-এর মালিক টার্মিনাল ব্যবহার করতে পারেন।"
+    "terminal_owner_only": "শুধু Crew-এর মালিক টার্মিনাল ব্যবহার করতে পারেন।",
+    "signed_out_title": "আপনি এই ডিভাইসে সাইন ইন করেননি",
+    "signed_out_body": "আপনার সেশন দেখতে সাইন ইন করুন।",
+    "signed_out_signin": "সাইন ইন করুন"
   },
   "appSdk": {
     "chatSession": {
@@ -7163,7 +7166,10 @@
       "composer_action_footer_host": "{{productName}} খসড়াটি দেখেছে। {{app}} এখনও এটি দেখতে পায় না।",
       "composer_action_needs_empty": "{{app}} শুধু খালি বার্তায় লেখা যোগ করতে পারে। আগে খসড়াটি মুছে ফেলো।",
       "composer_action_would_resolve": "{{app}}-এর লেখা /, ! বা @ দিয়ে শুরু, অথবা এতে $skill, ফাইল বা ছবি আছে, তাই এটি লেখা হিসেবে না গিয়ে চলত। এটি যোগ করা হয়নি।",
-      "composer_action_footer": "{{app}} তোমার খসড়া দেখতে পায় না। এর লেখা যেমন আছে তেমনই যোগ হয়, আর পাঠাবে কিনা তুমি ঠিক করো।"
+      "composer_action_footer": "{{app}} তোমার খসড়া দেখতে পায় না। এর লেখা যেমন আছে তেমনই যোগ হয়, আর পাঠাবে কিনা তুমি ঠিক করো।",
+      "phone_options": "বিকল্প",
+      "phone_options_hide": "বিকল্প লুকান",
+      "phone_options_desc": "লক্ষ্য, বিশ্বাসের স্তর, Conductor, AI সহায়তা, এজেন্ট ও মডেল"
     },
     "chatPane": {
       "agent_list": "এজেন্ট তালিকা",

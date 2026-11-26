@@ -225,12 +225,14 @@ export default function WeekGrid({ jobs, selectedId, onSelect, renderTz }: Props
   const nowFrac = nowHour - Math.floor(nowHour) // fraction within that hour
 
   return (
-    <div className="overflow-x-auto">
+    // On a touch screen the grid scrolls in its own box, so the pinned day
+    // headers stay in view while the hours scroll under them.
+    <div data-testid="week-grid-scroller" className="overflow-x-auto [@media(pointer:coarse)]:max-h-[70dvh] [@media(pointer:coarse)]:overflow-y-auto">
       <div className="grid min-w-[600px]" style={{ gridTemplateColumns: '50px repeat(7, 1fr)' }}>
         {/* Header row */}
-        <div className="py-2" />
+        <div className="py-2 sticky top-0 z-10 bg-card" />
         {DAY_INDEXES.map((i) => (
-          <div key={i} className={`py-2 text-center border-l border-l-border/20 ${i === todayGrid ? 'text-accent' : 'text-muted'}`}>
+          <div key={i} data-testid="week-day-header" className={`py-2 text-center border-l border-l-border/20 sticky top-0 z-10 bg-card ${i === todayGrid ? 'text-accent' : 'text-muted'}`}>
             <div className="text-[11px] font-medium">{dayLabel(i)}</div>
             <div className="text-[10px]">{weekDates[i]}</div>
           </div>
@@ -255,7 +257,7 @@ export default function WeekGrid({ jobs, selectedId, onSelect, renderTz }: Props
                       key={si}
                       // Hover cue is a fill-brighten, not a border/ring tint: at 2.5px a
                       // border tint is invisible, so brighten the coloured dot itself.
-                      className={`w-2.5 h-2.5 rounded-full ${s.color} cursor-pointer hover:brightness-125 ${!s.job.enabled ? 'opacity-30' : ''} ${selectedId === s.job.id ? 'ring-2 ring-accent ring-offset-1 ring-offset-bg' : ''}`}
+                      className={`mc-touch-hit w-2.5 h-2.5 [@media(pointer:coarse)]:w-4 [@media(pointer:coarse)]:h-4 rounded-full ${s.color} cursor-pointer hover:brightness-125 ${!s.job.enabled ? 'opacity-30' : ''} ${selectedId === s.job.id ? 'ring-2 ring-accent ring-offset-1 ring-offset-bg' : ''}`}
                       title={i18nT(s.job.enabled ? 'components.weekGrid.job_title' : 'components.weekGrid.job_title_paused', { name: s.job.name, time: slotTime(s), tz })}
                       aria-label={i18nT('components.weekGrid.job_at', { name: s.job.name, time: slotTime(s), tz })}
                       onClick={() => onSelect(s.job)}

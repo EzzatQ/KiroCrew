@@ -73,7 +73,7 @@ describe('ExecutionsView run row keyboard access', () => {
 
   it('still opens the trace from a click anywhere on the row', async () => {
     renderView()
-    fireEvent.click(await screen.findByText('did a thing'))
+    fireEvent.click((await screen.findAllByText('did a thing')).at(-1)!)
     expect(await screen.findByText('TRACE BODY')).toBeInTheDocument()
   })
 

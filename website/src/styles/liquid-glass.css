@@ -434,4 +434,22 @@
   :root{ --glass-edge:var(--text) }
   .liquid-glass>[data-liquid-glass-layer]{ display:none !important }
 }
+/* ── Solid panes on a touch screen (iOS shell, phones, tablets) ──
+   With "Translucent panels" on, the composer, the bell sheet's rows and the
+   header showed the page through them on a phone, where there is no wide
+   backdrop to blur and the text over a moving transcript is hard to read. A
+   coarse pointer gets the same solid fills as the reduced-transparency rules
+   above, whatever the switch says. Left out under `prefers-contrast: more`,
+   whose block above paints its own --text edge and must keep it. Pinned by
+   test/touchHitArea.test.ts. */
+@media (pointer: coarse) and (not (prefers-contrast: more)){
+  .topbar-glass,.glass-surface{ backdrop-filter:none !important; -webkit-backdrop-filter:none !important; background:var(--bg) !important }
+  .liquid-glass{ background:var(--bg-elevated) !important; outline:1px solid var(--border) !important; outline-offset:-1px }
+  .liquid-glass:focus-visible{ outline:2px solid var(--accent) !important; outline-offset:2px !important }
+  .liquid-glass.glass-accent{ background:color-mix(in srgb, var(--accent) 14%, var(--bg-elevated)) !important }
+  .liquid-glass.glass-warn{ background:color-mix(in srgb, var(--warn) 12%, var(--bg-elevated)) !important }
+  .liquid-glass.glass-danger{ background:color-mix(in srgb, var(--danger) 12%, var(--bg-elevated)) !important }
+  .liquid-glass>[data-liquid-glass-layer]{ display:none !important }
+  .notif-material{ background:var(--card) !important }
+}
 

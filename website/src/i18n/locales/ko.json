@@ -334,7 +334,10 @@
     "relay_remote_control_off": "이 Crew의 원격 액세스가 꺼져 있습니다",
     "relay_remote_control_off_detail": "Crew 소유자가 원격 액세스를 껐습니다. 소유자만 Crew의 컴퓨터에서 다시 켤 수 있습니다.",
     "relay_remote_control_off_waits": "다시 켜지면 이 페이지가 자동으로 다시 연결됩니다.",
-    "terminal_owner_only": "터미널은 Crew 소유자만 사용할 수 있습니다."
+    "terminal_owner_only": "터미널은 Crew 소유자만 사용할 수 있습니다.",
+    "signed_out_title": "이 기기에서 로그인되어 있지 않습니다",
+    "signed_out_body": "세션을 보려면 로그인하세요.",
+    "signed_out_signin": "로그인"
   },
   "appSdk": {
     "chatSession": {
@@ -6975,7 +6978,10 @@
       "composer_action_footer_host": "{{productName}}이(가) 초안을 확인했습니다. {{app}}은(는) 여전히 초안을 볼 수 없습니다.",
       "composer_action_needs_empty": "{{app}}은(는) 빈 메시지에만 넣을 수 있습니다. 먼저 초안을 비우세요.",
       "composer_action_would_resolve": "{{app}}의 텍스트가 /, ! 또는 @로 시작하거나 $skill, 파일, 이미지를 포함해 텍스트로 보내지지 않고 실행됩니다. 넣지 않았습니다.",
-      "composer_action_footer": "{{app}}은(는) 초안을 볼 수 없습니다. 텍스트는 그대로 들어가며, 보낼지는 직접 정합니다."
+      "composer_action_footer": "{{app}}은(는) 초안을 볼 수 없습니다. 텍스트는 그대로 들어가며, 보낼지는 직접 정합니다.",
+      "phone_options": "옵션",
+      "phone_options_hide": "옵션 숨기기",
+      "phone_options_desc": "목표, 신뢰 수준, Conductor, AI 지원, 에이전트, 모델"
     },
     "chatPane": {
       "agent_list": "에이전트 목록",

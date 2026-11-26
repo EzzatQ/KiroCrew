@@ -123,15 +123,21 @@ function DropdownMenu({ open: openProp, defaultOpen, onOpenChange, modal: modalP
  * Radix `DropdownMenu.Trigger`; it also tells its menu which element it is (for a
  * guide's probe).
  *
- * A touch or pen press OPENS the menu on the tap's `click`, not on `pointerdown`.
- * Radix toggles on `pointerdown` for every pointer type, so on a phone the menu
- * opened the moment a finger landed on the trigger, before the browser could tell
- * a tap from a scroll, and a scroll that started on a row's ⋮ button opened its
- * menu. Cancelling the `pointerdown` here makes Radix skip its handler (it
- * composes ours first and checks `defaultPrevented`); it does not stop the scroll,
- * which only a `touchstart` cancel could. A scroll never produces a `click`, so
- * the menu stays closed; a tap does, and the click opens the menu through the
- * owning `DropdownMenu`'s state.
+ * A touch or pen press OPENS the menu when the finger lifts (`pointerup`), not on
+ * `pointerdown`. Radix toggles on `pointerdown` for every pointer type, so on a
+ * phone the menu opened the moment a finger landed on the trigger, before the
+ * browser could tell a tap from a scroll, and a scroll that started on a row's
+ * ⋮ button opened its menu. Cancelling the `pointerdown` here makes Radix skip
+ * its handler (it composes ours first and checks `defaultPrevented`); it does not
+ * stop the scroll, which only a `touchstart` cancel could. A scroll ends in
+ * `pointercancel`, or in a lift far from where it began, so neither opens the
+ * menu. We do not wait for the tap's `click`: an iOS WebView under automation does
+ * not always deliver one after a cancelled `pointerdown`. The `click` that does
+ * follow a handled `pointerup` is ignored, so the menu is not toggled twice.
+ *
+ * A `click` with no pointer event just before it (VoiceOver double-tap, Switch
+ * Control, scripted clicks) toggles the menu, since Radix only listens for
+ * `pointerdown` and `keydown`.
  *
  * A touch or pen press on the trigger of an OPEN menu closes it at once, as
  * Radix does. Closing on a scroll-start is harmless, and deferring the close to
@@ -143,42 +149,59 @@ function DropdownMenu({ open: openProp, defaultOpen, onOpenChange, modal: modalP
  * applies to the composer chips. Keyboard opening is Radix's own `keydown`
  * handling and is unchanged.
  */
+const TAP_SLOP_PX = 10
+/** A click this soon after a pointer event belongs to that gesture. */
+const CLICK_AFTER_POINTER_MS = 1000
+
 const DropdownMenuTrigger = React.forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger>
->(function DropdownMenuTrigger({ onPointerDown, onPointerCancel, onClick, ...props }, ref) {
+>(function DropdownMenuTrigger({ onPointerDown, onPointerUp, onPointerCancel, onClick, ...props }, ref) {
   const setRef = useTriggerRef(DropdownTriggerSink, ref)
   const menu = React.useContext(DropdownOpenState)
-  // True between a deferred press on a closed menu and its click. The browser
-  // fires `pointercancel` when it takes the touch as a scroll, which clears it,
-  // so only the click of a later press can spend it. A tap's synthesized click
-  // may carry `detail` 0, so `detail` cannot tell it apart from a keyboard or
-  // programmatic click.
-  const tapPending = React.useRef(false)
+  // Where a deferred press on a closed menu began; null once spent. A
+  // `pointercancel` (the browser took the touch as a scroll) clears it.
+  const tapStart = React.useRef<{ x: number; y: number } | null>(null)
+  // When the last pointer event on the trigger fired, to tell a click that
+  // belongs to a pointer gesture from a bare one.
+  const lastPointerAt = React.useRef<number | null>(null)
   const handlePointerDown = React.useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
     onPointerDown?.(e)
-    tapPending.current = false
+    tapStart.current = null
+    lastPointerAt.current = e.timeStamp
     if (e.defaultPrevented || !menu || !isScrollingPointer(e)) return
     e.preventDefault()
     if (props.disabled) return
     if (menu.isOpen()) menu.setOpen(false)
-    else tapPending.current = true
+    else tapStart.current = { x: e.clientX, y: e.clientY }
   }, [menu, onPointerDown, props.disabled])
+  const handlePointerUp = React.useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    onPointerUp?.(e)
+    lastPointerAt.current = e.timeStamp
+    const start = tapStart.current
+    tapStart.current = null
+    if (!start || !menu || e.defaultPrevented || props.disabled) return
+    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP_PX) return
+    menu.setOpen(true)
+  }, [menu, onPointerUp, props.disabled])
   const handlePointerCancel = React.useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
     onPointerCancel?.(e)
-    tapPending.current = false
+    tapStart.current = null
+    lastPointerAt.current = e.timeStamp
   }, [onPointerCancel])
   const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     onClick?.(e)
-    const pending = tapPending.current
-    tapPending.current = false
-    if (!pending || e.defaultPrevented || props.disabled) return
-    menu?.setOpen(true)
+    const last = lastPointerAt.current
+    lastPointerAt.current = null
+    if (!menu || e.defaultPrevented || props.disabled) return
+    if (last !== null && e.timeStamp - last < CLICK_AFTER_POINTER_MS) return
+    menu.setOpen(!menu.isOpen())
   }, [menu, onClick, props.disabled])
   return (
     <DropdownMenuPrimitive.Trigger
       ref={setRef}
       onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       onClick={handleClick}
       {...props}

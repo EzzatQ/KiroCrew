@@ -140,6 +140,69 @@ describe('DropdownMenuTrigger on a touch pointer', () => {
   })
 })
 
+describe('DropdownMenuTrigger opens on pointerup, without needing a click', () => {
+  const up = (el: HTMLElement, x = 0, y = 0) => fireEvent.pointerUp(el, { pointerType: 'touch', button: 0, clientX: x, clientY: y })
+
+  it('pointerdown then pointerup opens the menu once, with no click (an engine that drops it)', () => {
+    const onOpenChange = vi.fn()
+    render(<Harness onOpenChange={onOpenChange} />)
+    touchDown(trigger())
+    up(trigger())
+    expect(menuOpen()).toBe(true)
+    expect(onOpenChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('the click that follows the pointerup does not toggle it closed', () => {
+    const onOpenChange = vi.fn()
+    render(<Harness onOpenChange={onOpenChange} />)
+    touchDown(trigger())
+    up(trigger())
+    fireEvent.click(trigger(), { detail: 1 })
+    expect(menuOpen()).toBe(true)
+    expect(onOpenChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('a lift that moved past the slop is a drag and does not open', () => {
+    render(<Harness />)
+    act(() => {
+      trigger().dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true, cancelable: true, pointerType: 'touch', button: 0, clientX: 5, clientY: 5,
+      }))
+    })
+    up(trigger(), 5, 60)
+    expect(menuOpen()).toBe(false)
+  })
+
+  it('a lift within the slop still opens', () => {
+    render(<Harness />)
+    touchDown(trigger())
+    up(trigger(), 4, 3)
+    expect(menuOpen()).toBe(true)
+  })
+
+  it('pointercancel then pointerup does not open', () => {
+    render(<Harness />)
+    touchDown(trigger())
+    fireEvent.pointerCancel(trigger(), { pointerType: 'touch' })
+    up(trigger())
+    expect(menuOpen()).toBe(false)
+  })
+
+  it('a bare click with no pointer events (VoiceOver double-tap) opens, and the next one closes', () => {
+    render(<Harness />)
+    fireEvent.click(trigger(), { detail: 1 })
+    expect(menuOpen()).toBe(true)
+    fireEvent.click(trigger(), { detail: 1 })
+    expect(menuOpen()).toBe(false)
+  })
+
+  it('a bare click on a disabled trigger stays closed', () => {
+    render(<Harness disabled />)
+    fireEvent.click(trigger(), { detail: 1 })
+    expect(menuOpen()).toBe(false)
+  })
+})
+
 describe('DropdownMenuTrigger on a mouse', () => {
   it('opens on the press, as Radix does, and the release click does not close it again', () => {
     const onOpenChange = vi.fn()

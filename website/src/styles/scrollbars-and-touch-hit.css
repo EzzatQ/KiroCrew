@@ -47,6 +47,26 @@
   }
 }
 
+/* ── Real 44px floor for the controls a UI test measures ──
+   `.mc-touch-hit` grows only an invisible ::after, which an accessibility
+   client (XCUITest reads the element's frame) does not see: the control still
+   measures 28-32px. `.mc-touch-min` grows the BOX itself to 44x44 on a coarse
+   pointer, for the specific controls a phone UI test asserts on (header bell
+   and menu toggle, the ⋯ and ⋮ menus, per-message actions, composer chips,
+   dismiss buttons). Use `.mc-touch-hit` everywhere else: it moves no layout.
+   The host keeps its own display; give it `flex items-center justify-center`
+   (every icon button here already does) so the icon stays centred. A fine
+   pointer gets no rule at all. */
+@layer components {
+  @media (pointer: coarse) {
+    .mc-touch-min { min-width: 44px; min-height: 44px; }
+    /* Header controls: the 44px box overhangs the 42px bar instead of growing it. */
+    .mc-touch-min-bleed { margin-block: -8px; }
+    /* Air between a control and a destructive neighbour (Send now beside Cancel). */
+    .mc-touch-gap-end { margin-inline-end: 12px; }
+  }
+}
+
 /* ── Send button sweep ── */
 .btn-sweep{position:relative;overflow:hidden}
 .btn-sweep::after{content:'';position:absolute;inset:0;
@@ -65,3 +85,6 @@
 /* Only a card that does something lights up under the cursor. */
 .stat-accent[role="button"]:hover::after{opacity:1}
 
+
+/* The iOS shell shows its own signed-out page; the desktop session-expired banner (terminal text) stays out of it. */
+html.kc-native #mc-session-expired { display: none; }

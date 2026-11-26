@@ -223,7 +223,7 @@ export default function MobileTopBar({
       <ConcurrencyCutLiveRegion />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="relative mc-touch-hit w-8 h-8 rounded-md flex items-center justify-center text-text hover:text-text-strong hover:bg-bg-hover bg-transparent border-none cursor-pointer shrink-0" aria-label={i18nT('pages.chatPage.more_actions')} title={i18nT('pages.chatPage.more_actions')} data-testid="mobile-topbar-more">
+          <button type="button" className="relative mc-touch-hit mc-touch-min mc-touch-min-bleed w-8 h-8 rounded-md flex items-center justify-center text-text hover:text-text-strong hover:bg-bg-hover bg-transparent border-none cursor-pointer shrink-0" aria-label={i18nT('pages.chatPage.more_actions')} title={i18nT('pages.chatPage.more_actions')} data-testid="mobile-topbar-more">
             <MoreHorizontal size={18} />
             <ConcurrencyCutDot />
           </button>

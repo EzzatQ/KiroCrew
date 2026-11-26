@@ -1642,3 +1642,39 @@ describe("A Bot session's wait rides on its Bot in Needs You (#41359)", () => {
     expect(row?.textContent).toContain('Approve')
   })
 })
+
+describe('on a touch device', () => {
+  const realMatchMedia = window.matchMedia
+  const setTouch = (touch: boolean) => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: touch && (query === '(pointer: coarse)' || query === '(hover: none)'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
+  }
+  afterEach(() => { Object.defineProperty(window, 'matchMedia', { writable: true, configurable: true, value: realMatchMedia }) })
+
+  it('shows a labelled Close button that dismisses the bar, and drops the Enter keycap', () => {
+    setTouch(true)
+    const onClose = mount()
+    const close = screen.getByTestId('command-bar-close')
+    expect(close).toHaveAttribute('aria-label')
+    expect(close.getAttribute('aria-label')).not.toBe('')
+    expect(screen.queryByText('↵')).toBeNull()
+    fireEvent.click(close)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the keycap and has no Close button with a fine pointer', () => {
+    setTouch(false)
+    mount()
+    expect(screen.queryByTestId('command-bar-close')).toBeNull()
+    expect(screen.getByText('↵')).toBeInTheDocument()
+  })
+})

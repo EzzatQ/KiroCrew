@@ -218,7 +218,7 @@ export function HoldToTalkBar({ manualHeight, setHoldTarget, touchPtt, disabled,
 
 /** The mic: a record toggle, or on touch the switch between the keyboard and
  *  hold-to-talk (see `micIsModeSwitch` in `chat-input/voice.ts`). */
-export function MicButton({ voiceHoldMode, voiceRecording, micIsModeSwitch, transcribeInFlight, micHeldElsewhere, micBlocked, toggleVoiceMode, onVoiceToggle, onVoicePrewarm, disabled, optimizing, micLabel, micKeyShortcuts }: {
+export function MicButton({ voiceHoldMode, voiceRecording, micIsModeSwitch, transcribeInFlight, micHeldElsewhere, micBlocked, toggleVoiceMode, onVoiceToggle, onVoicePrewarm, disabled, optimizing, micLabel, micKeyShortcuts, touchMin = false }: {
   voiceHoldMode: boolean
   voiceRecording: boolean
   micIsModeSwitch: boolean
@@ -233,6 +233,8 @@ export function MicButton({ voiceHoldMode, voiceRecording, micIsModeSwitch, tran
   micLabel: string
   /** The push-to-talk key as an `aria-keyshortcuts` value; absent when no key applies. */
   micKeyShortcuts?: string
+  /** Phone composer: a real 44px box on a coarse pointer. */
+  touchMin?: boolean
 }) {
   return (
     <button
@@ -240,7 +242,7 @@ export function MicButton({ voiceHoldMode, voiceRecording, micIsModeSwitch, tran
       // In hold mode the switch carries a visible label: its `title` is
       // hover-only and hold mode is a touch surface, so a bare icon read
       // as "no idea what it toggles".
-      className={`${voiceHoldMode ? 'px-2.5 gap-1.5 text-[12px] font-medium' : 'w-8'} h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all border-none ${
+      className={`${touchMin ? 'mc-touch-min ' : ''}${voiceHoldMode ? 'px-2.5 gap-1.5 text-[12px] font-medium' : 'w-8'} h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all border-none ${
         // The recording tint belongs to the RECORD button. As a mode
         // switch (hold mode) this button hands the keyboard back; a red
         // pulse on it read as an alarm on an unexplained control.

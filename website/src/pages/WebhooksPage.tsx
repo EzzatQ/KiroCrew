@@ -696,6 +696,31 @@ export default function WebhooksPage() {
 
   /* ── panes ── */
 
+  // The arm-then-confirm Turn off for the whole webhook switch. On a phone it
+  // moves to the Danger zone below the routing, away from the first thumb reach.
+  const globalOff = switchOn && (switchArmed
+    ? (
+      <>
+        <span className="text-[12px] text-muted">
+          {i18nT('pages.webhooksPage.tokens_and_run_history_are_kept_you_can_switch_i')}
+        </span>
+        <Btn
+          danger
+          data-testid="webhook-switch-off-confirm"
+          disabled={setSwitch.isPending}
+          onClick={() => setSwitch.mutate(false)}
+        >
+          <Power size={13} /> {i18nT('pages.webhooksPage.confirm_turn_off')}
+        </Btn>
+        <Btn onClick={() => setSwitchArmed(false)}>{i18nT('pages.webhooksPage.keep_it_on')}</Btn>
+      </>
+    )
+    : (
+      <Btn danger data-testid="webhook-switch-off" onClick={() => setSwitchArmed(true)}>
+        <Power size={13} /> {i18nT('pages.webhooksPage.turn_off')}
+      </Btn>
+    ))
+
   const globalControl = (
     <div
       data-testid="webhook-switch-row"
@@ -708,28 +733,7 @@ export default function WebhooksPage() {
       </Badge>
       <span className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
         {switchOn
-          ? (switchArmed
-            ? (
-              <>
-                <span className="text-[12px] text-muted">
-                  {i18nT('pages.webhooksPage.tokens_and_run_history_are_kept_you_can_switch_i')}
-                </span>
-                <Btn
-                  danger
-                  data-testid="webhook-switch-off-confirm"
-                  disabled={setSwitch.isPending}
-                  onClick={() => setSwitch.mutate(false)}
-                >
-                  <Power size={13} /> {i18nT('pages.webhooksPage.confirm_turn_off')}
-                </Btn>
-                <Btn onClick={() => setSwitchArmed(false)}>{i18nT('pages.webhooksPage.keep_it_on')}</Btn>
-              </>
-            )
-            : (
-              <Btn danger data-testid="webhook-switch-off" onClick={() => setSwitchArmed(true)}>
-                <Power size={13} /> {i18nT('pages.webhooksPage.turn_off')}
-              </Btn>
-            ))
+          ? (isMobile ? null : globalOff)
           : (
             <Btn
               primary
@@ -870,6 +874,37 @@ export default function WebhooksPage() {
     </>
   )
 
+  // Turn off and Revoke. On a phone they leave the top of the pane (where a
+  // thumb lands first) for a Danger zone after the routing and run history.
+  const sourceActions = selectedToken && (
+    <div
+      data-testid="webhook-source-actions"
+      className="flex flex-wrap items-center justify-end gap-1.5 px-4 pb-3.5"
+    >
+      {!selectedToken.legacy && confirmRevoke !== selectedToken.id && (
+        <Btn
+          data-testid={`webhook-source-toggle-${selectedToken.id}`}
+          disabled={updateToken.isPending}
+          onClick={() => updateToken.mutate({
+            id: selectedToken.id,
+            patch: { enabled: selectedToken.enabled === false },
+          })}
+        >
+          <Power size={13} /> {selectedToken.enabled !== false
+            ? i18nT('pages.webhooksPage.turn_off')
+            : i18nT('pages.webhooksPage.turn_on')}
+        </Btn>
+      )}
+      <RevokeButton
+        token={selectedToken}
+        confirming={confirmRevoke === selectedToken.id}
+        onArm={() => setConfirmRevoke(selectedToken.id)}
+        onConfirm={() => revokeToken.mutate(selectedToken.id)}
+        onCancel={() => setConfirmRevoke(null)}
+      />
+    </div>
+  )
+
   const tokenPane = selectedToken && (
     <>
       {globalControl}
@@ -889,32 +924,7 @@ export default function WebhooksPage() {
               : i18nT('pages.schedulePage.paused')}
           </Badge>
         </div>
-        <div
-          data-testid="webhook-source-actions"
-          className="flex flex-wrap items-center justify-end gap-1.5 px-4 pb-3.5"
-        >
-          {!selectedToken.legacy && confirmRevoke !== selectedToken.id && (
-            <Btn
-              data-testid={`webhook-source-toggle-${selectedToken.id}`}
-              disabled={updateToken.isPending}
-              onClick={() => updateToken.mutate({
-                id: selectedToken.id,
-                patch: { enabled: selectedToken.enabled === false },
-              })}
-            >
-              <Power size={13} /> {selectedToken.enabled !== false
-                ? i18nT('pages.webhooksPage.turn_off')
-                : i18nT('pages.webhooksPage.turn_on')}
-            </Btn>
-          )}
-          <RevokeButton
-            token={selectedToken}
-            confirming={confirmRevoke === selectedToken.id}
-            onArm={() => setConfirmRevoke(selectedToken.id)}
-            onConfirm={() => revokeToken.mutate(selectedToken.id)}
-            onCancel={() => setConfirmRevoke(null)}
-          />
-        </div>
+        {!isMobile && sourceActions}
       </div>
 
       <Section title={i18nT('pages.kiroCrewAgentsPage.routing')}>
@@ -1023,6 +1033,12 @@ export default function WebhooksPage() {
           }}
         />
       </Section>
+      {isMobile && (
+        <Section title={i18nT('pages.kiroCrewAgentsPage.danger_zone')}>
+          {sourceActions}
+          {globalOff && <div data-testid="webhook-danger-global" className="flex flex-wrap items-center justify-end gap-1.5 px-4 pb-3.5">{globalOff}</div>}
+        </Section>
+      )}
     </>
   )
 
@@ -1261,7 +1277,7 @@ export default function WebhooksPage() {
               onClick={() => sendTest.mutate(selectedToken.agent || 'kirocrew')}
             >
               <Play size={14} />{' '}
-              <span className="hidden sm:inline">
+              <span>
                 {sendTest.isPending ? i18nT('pages.webhooksPage.sending') : i18nT('pages.webhooksPage.send_test_request')}
               </span>
             </Btn>

@@ -943,7 +943,7 @@ function QueueStackInner({ messages, onCancel, onCancelAll, onInterrupt, onEdit,
                       {onReorder && expanded && messages.length > 1 && (
                         <>
                           <button
-                            className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                            className="mc-touch-min mc-touch-min-bleed inline-flex items-center justify-center shrink-0 p-0.5 rounded hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
                             title={i18nT('components.queueStack.run_sooner')}
                             aria-label={i18nT('components.queueStack.run_sooner')}
                             disabled={i === 0}
@@ -952,7 +952,7 @@ function QueueStackInner({ messages, onCancel, onCancelAll, onInterrupt, onEdit,
                             <ArrowDown size={13} />
                           </button>
                           <button
-                            className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                            className="mc-touch-min mc-touch-min-bleed inline-flex items-center justify-center shrink-0 p-0.5 rounded hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
                             title={i18nT('components.queueStack.run_later')}
                             aria-label={i18nT('components.queueStack.run_later')}
                             disabled={i === messages.length - 1}
@@ -964,7 +964,7 @@ function QueueStackInner({ messages, onCancel, onCancelAll, onInterrupt, onEdit,
                       )}
                       {onEdit && showActions && !isServerWritten && !isWritten && (
                         <button
-                          className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="mc-touch-min mc-touch-min-bleed inline-flex items-center justify-center shrink-0 p-0.5 rounded hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           title={i18nT('components.queueStack.edit_queued_message')}
                           aria-label={i18nT('components.queueStack.edit_queued_message')}
                           disabled={isPending}
@@ -977,7 +977,7 @@ function QueueStackInner({ messages, onCancel, onCancelAll, onInterrupt, onEdit,
                       )}
                       {onInterrupt && showActions && (
                         <button
-                          className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-hover)] transition-colors text-[var(--text)] disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="mc-touch-min mc-touch-min-bleed mc-touch-gap-end inline-flex items-center justify-center shrink-0 p-0.5 rounded hover:bg-[var(--bg-hover)] transition-colors text-[var(--text)] disabled:opacity-40 disabled:cursor-not-allowed"
                           title={i18nT('components.queueStack.interrupt_current_turn_and_send_this_now')}
                           aria-label={i18nT('components.queueStack.send_now')}
                           disabled={isPending}
@@ -988,7 +988,7 @@ function QueueStackInner({ messages, onCancel, onCancelAll, onInterrupt, onEdit,
                       )}
                       {onCancel && showActions && !isWritten && (
                         <button
-                          className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="mc-touch-min mc-touch-min-bleed inline-flex items-center justify-center shrink-0 p-0.5 rounded hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           title={i18nT(isServerWritten ? 'components.queueStack.cancel_queued_message' : 'components.queueStack.cancel_and_move_back_to_input')}
                           aria-label={i18nT('components.queueStack.cancel_queued_message')}
                           disabled={isPending}

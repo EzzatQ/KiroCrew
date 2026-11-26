@@ -334,7 +334,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
           const s = NAV_ITEMS.find(n => n.id === 'settings')!
           const cap = NAV_ITEMS.find(n => n.id === 'capabilities')!
           return (
-            <div className="shrink-0 grid grid-cols-[minmax(0,1fr)] gap-0.5 px-2 pt-1 pb-2">
+            <div className={`shrink-0 grid grid-cols-[minmax(0,1fr)] gap-0.5 px-2 pt-1 pb-2${isMobile ? ' max-h-[40dvh] overflow-y-auto' : ''}`}>
               {terminalEnabled && (
                 <NavItem
                   path="#"

@@ -111,6 +111,8 @@ import { RailHeaderGlyph } from './shell/nav/railChrome'
 import { AdaptiveMobileRail } from './shell/nav/adaptiveMobileRail'
 import { guideTarget } from './uiLocations/targetRegistry'
 import { useAppShell } from './shell/appShell'
+import { SignedOutPage } from './shell/SignedOutPage'
+import { useNativeSignedOut } from './shell/platform/nativeAuth'
 import { ShellHeader } from './shell/topbar/shellHeader'
 import { hiddenChromeProps } from './shell/focus/focusChrome'
 import { RelayReconnectingView } from './shell/RelayReconnectingView'
@@ -457,7 +459,10 @@ export default function App() {
     updateFlow, updating, setUpdating, showUpdateModal, setShowUpdateModal, showChangelog, updateError,
     setUpdateError, reportProblemOpen, setReportProblemOpen, effectiveCollapsed, activePath,
     libraryNavActive, discoverNavActive, isChat, needsFixedHeight, navRowActive, membersRoute, mobileSingle,
+    authRequired,
   } = shell
+  // The iOS shell's signed-out page replaces the app while the gateway refuses this session.
+  const nativeSignedOut = useNativeSignedOut(authRequired)
   // A calm offline view covers <main> and the docked terminal (see `offlineCover`).
   const contentCovered = offlineCoverKind !== null
   // The first-run sign-in hides this app behind it, so the local layers hide too.
@@ -673,6 +678,7 @@ export default function App() {
   return (
     <ZoomProvider>
     <WsContext.Provider value={{ subscribeLogs, subscribeSubagents, forceReconnect }}>
+    {nativeSignedOut && <SignedOutPage />}
     {/* A crew's pop-out framed by a desktop hub's window learns its host here;
         no-op when not framed. */}
     {isPopout && <EmbeddedHostBridge />}

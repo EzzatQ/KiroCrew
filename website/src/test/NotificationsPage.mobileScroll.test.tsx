@@ -101,6 +101,23 @@ describe('NotificationsPage scroll containers', () => {
     expect(splitRow().className).not.toContain('min-h-0')
   })
 
+  it('mobile: the five counters follow the feed as one scrolling row', () => {
+    mobile = true
+    renderWithProviders(<NotificationsPage />, { store: createTestStore(stateWith([note])) })
+    const stats = screen.getByTestId('notifications-stats')
+    expect(stats.className).toContain('order-last')
+    expect(stats.className).toContain('overflow-x-auto')
+    expect(stats.className).not.toContain('grid')
+    expect(stats.children).toHaveLength(5)
+  })
+
+  it('desktop: the counters stay a grid above the split', () => {
+    renderWithProviders(<NotificationsPage />, { store: createTestStore(stateWith([note])) })
+    const stats = screen.getByTestId('notifications-stats')
+    expect(stats.className).toContain('grid')
+    expect(stats.className).not.toContain('order-last')
+  })
+
   it('mobile detail: natural-height card with a sticky Back row above it', () => {
     mobile = true
     const store = createTestStore(stateWith([note]))

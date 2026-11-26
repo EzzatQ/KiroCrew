@@ -1508,13 +1508,13 @@ describe('turn stats footer (elapsed time + credits)', () => {
 describe('action footer touch sizing', () => {
   // happy-dom does not evaluate media queries, so the hover-none utility
   // classes themselves are pinned, the same way the footer reveal is.
-  it('enlarges the actions to 36x32 cells, flush against each other, where the pointer cannot hover', () => {
+  it('enlarges the actions to 44x44 cells, flush against each other, where the pointer cannot hover', () => {
     render(<AssistantMessage content="Hi" isStreaming={false} slotRunning={false} onRegenerate={() => {}} />)
     const footer = screen.getByTitle('Regenerate').parentElement!
-    // Fixed 36x32 cells with the glyph centred, not padding: padding-and-gap put
+    // Fixed 44x44 cells with the glyph centred, not padding: padding-and-gap put
     // 28px of air between glyphs and the row wrapped on a 390px phone.
-    expect(footer.className).toContain('[@media(hover:none)]:[&_button]:h-8')
-    expect(footer.className).toContain('[@media(hover:none)]:[&_button]:w-9')
+    expect(footer.className).toContain('[@media(hover:none)]:[&_button]:h-11')
+    expect(footer.className).toContain('[@media(hover:none)]:[&_button]:w-11')
     expect(footer.className).toContain('[&_button]:p-0')
     expect(footer.className).toContain('gap-x-0')
     expect(footer.className).not.toContain('[&_button]:p-3')

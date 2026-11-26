@@ -74,11 +74,18 @@ interface SegmentedControlProps<T extends string = string> {
    * icons are self-evident (grid/list) where even the selected label is noise.
    */
   iconOnly?: boolean
+  /**
+   * Announce the group as a tab strip (`tablist` of `tab`s with `aria-selected`)
+   * instead of a radio group, for a control that switches the view below it.
+   * Only the inline (full / compact) form changes; the collapsed dropdown keeps
+   * its radio list.
+   */
+  tabs?: boolean
 }
 
 type Mode = 'full' | 'compact' | 'dropdown'
 
-export default function SegmentedControl<T extends string = string>({ segments, value, onChange, layoutId = 'segment', ariaLabel, ariaDescribedBy, wrap = false, collapse = true, compact = false, iconOnly = false }: SegmentedControlProps<T>) {
+export default function SegmentedControl<T extends string = string>({ segments, value, onChange, layoutId = 'segment', ariaLabel, ariaDescribedBy, wrap = false, collapse = true, compact = false, iconOnly = false, tabs = false }: SegmentedControlProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const dropdownToggleRef = useRef<HTMLButtonElement>(null)
   const radioRefs = useRef(new Map<T, HTMLButtonElement>())
@@ -286,7 +293,7 @@ export default function SegmentedControl<T extends string = string>({ segments, 
     <>
       <div
         ref={containerRef}
-        role="radiogroup"
+        role={tabs ? 'tablist' : 'radiogroup'}
         aria-label={ariaLabel}
         aria-describedby={ariaDescribedBy}
         className={`isolate inline-flex rounded-lg bg-bg-elevated border border-border p-0.5 gap-0.5 ${wrap === 'hug' ? 'flex-wrap max-w-full' : wrap ? 'flex-wrap w-full' : ''}`}
@@ -331,8 +338,9 @@ export default function SegmentedControl<T extends string = string>({ segments, 
               key={s.key}
               {...segmentMarker<HTMLButtonElement>(s, node => setRadioRef(s.key, node))}
               type="button"
-              role="radio"
-              aria-checked={isActive}
+              role={tabs ? 'tab' : 'radio'}
+              aria-checked={tabs ? undefined : isActive}
+              aria-selected={tabs ? isActive : undefined}
               aria-label={labelShown ? undefined : s.label}
               aria-describedby={isDisabled ? ariaDescribedBy : undefined}
               aria-disabled={isDisabled || undefined}

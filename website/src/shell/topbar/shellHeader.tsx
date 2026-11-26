@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense, isValidElement, type ReactNode } from 'react'
+import { useState, lazy, Suspense, isValidElement, type ReactNode } from 'react'
 import { TOPBAR_FOCUS_Z, TOPBAR_Z } from '../../lib/themeDecorLayer'
 import { kiroSignInSegment, kiroUsageSegment } from './kiroUsageReadout'
 import { metricsSegment, MetricsErrorNotice } from './metricsReadout'
@@ -6,7 +6,7 @@ import { ResourcePostureChip } from './resourcePostureChip'
 import { Bell, Fullscreen, Loader2, Menu, Plug, Unplug } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { isWinElectron, isLinuxFramelessElectron, shellServesLinuxAppMenu } from '../../lib/electron'
-import { setNativeBadgeCount } from '../platform/electronBridge'
+import { isUnackedAttention } from '../platform/useNativeBadgeCount'
 import { SELECTION_INERT_ATTR } from '../../pages/chat/useSelectionInertOverlays'
 import { PackLoaderImage } from '../../pages/chat/PackLoaderImage'
 import ErrorBoundary from '../../components/ErrorBoundary'
@@ -116,21 +116,15 @@ function NotificationsBellButton() {
   const shortcut = useNavShortcutHint('/notifications')
   const sheet = useNotificationSheet()
   const { items, open, containerRef, bellRef } = sheet
-  // Badge counts attention-worthy rows only (RFC Phase 3): passive and
-  // muted-channel (silenced) rows are excluded, mirroring the backend's
-  // unread_count semantics.
-  const unacked = items.filter(n => !n.acked && n.priority !== 'passive' && !n.silenced)
-
-  // RFC Phase 4: mirror the unread count onto the desktop dock/taskbar badge.
-  useEffect(() => {
-    setNativeBadgeCount(unacked.length)
-  }, [unacked.length])
+  // Badge counts attention-worthy rows only (RFC Phase 3). The native
+  // dock/taskbar badge is mirrored app-wide by `useNativeBadgeCount`.
+  const unacked = items.filter(isUnackedAttention)
 
   return (
     <div ref={containerRef} className="relative">
       <HoverTip label={unacked.length > 0 ? i18nT('app.notification_count', { count: unacked.length }) : i18nT('app.notifications')}>
       <button
-        className={`flex items-center justify-center w-7 h-7 rounded-md hover:bg-bg-hover transition-colors bg-transparent border-none cursor-pointer shrink-0 relative ${open ? 'text-accent' : 'text-muted hover:text-text'}`}
+        className={`mc-touch-min mc-touch-min-bleed flex items-center justify-center w-7 h-7 rounded-md hover:bg-bg-hover transition-colors bg-transparent border-none cursor-pointer shrink-0 relative ${open ? 'text-accent' : 'text-muted hover:text-text'}`}
         onClick={sheet.toggle}
         // Chord declared to assistive tech ONLY, deliberately not in the hover
         // hint (navShortcutHint.test.tsx pins it): the hint is the base copy, and
@@ -138,6 +132,7 @@ function NotificationsBellButton() {
         // route survives. The VISIBLE chord stays a rail affordance, where the
         // render-time i18n gate's `kbd` / `[data-i18n-opaque]` escape can mark it.
         aria-label={i18nT('app.notifications')}
+        data-testid="shell-notifications-bell"
         {...uiLocation('shell.notifications', bellRef)}
         aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
         aria-haspopup="dialog"
@@ -145,7 +140,7 @@ function NotificationsBellButton() {
       >
         <Bell size={15} />
         {unacked.length > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-accent text-accent-fg text-[10px] font-bold flex items-center justify-center shadow-[0_0_2px_var(--accent-glow)]" aria-hidden="true">
+          <span className="absolute -top-1 -right-1 [@media(pointer:coarse)]:top-0.5 [@media(pointer:coarse)]:right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-accent text-accent-fg text-[10px] font-bold flex items-center justify-center shadow-[0_0_2px_var(--accent-glow)]" aria-hidden="true">
             {unacked.length > 99 ? '99+' : unacked.length}
           </span>
         )}
@@ -480,7 +475,7 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
               {membersBarPending && (
                 <button
                   type="button"
-                  className="mc-touch-hit p-2 rounded-md text-text hover:text-text-strong hover:bg-bg-hover cursor-pointer bg-transparent border-none shrink-0"
+                  className="mc-touch-hit mc-touch-min mc-touch-min-bleed p-2 rounded-md text-text hover:text-text-strong hover:bg-bg-hover cursor-pointer bg-transparent border-none shrink-0"
                   onClick={toggleNav}
                   aria-label={i18nT('app.open_menu')}
                   aria-expanded={mobileNavOpen}
